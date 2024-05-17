@@ -1,0 +1,24 @@
+name: Repository Unit Tests
+
+on: [pull_request, workflow_dispatch]
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [14]
+        os: [windows-latest, macOS-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          check-latest: true
+      - name: Setup project
+        run: npm install
+      - name: Lint project
+        run: npm run lint
+      - name: Run Unit Tests
+        run: npm run test
