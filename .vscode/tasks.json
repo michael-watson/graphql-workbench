@@ -1,41 +1,29 @@
-// See https://go.microsoft.com/fwlink/?LinkId=733558
-// for the documentation about the tasks.json format
 {
-	"version": "2.0.0",
-	"tasks": [
-		{
-			"type": "npm",
-			"script": "watch",
-			"problemMatcher": "$ts-webpack-watch",
-			"isBackground": true,
-			"presentation": {
-				"reveal": "never",
-				"group": "watchers"
-			},
-			"group": {
-				"kind": "build",
-				"isDefault": true
-			},
-			"label": "npm: watch",
-		},
-		{
-			"type": "npm",
-			"script": "watch-tests",
-			"problemMatcher": "$tsc-watch",
-			"isBackground": true,
-			"presentation": {
-				"reveal": "never",
-				"group": "watchers"
-			},
-			"group": "build"
-		},
-		{
-			"label": "tasks: watch-tests",
-			"dependsOn": [
-				"npm: watch",
-				"npm: watch-tests"
-			],
-			"problemMatcher": []
-		}
-	]
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "npm: build - graphql-workbench",
+      "type": "npm",
+      "script": "build",
+      "path": "packages/graphql-workbench",
+      "problemMatcher": ["$esbuild"],
+      "group": "build"
+    },
+    {
+      "label": "npm: watch - graphql-workbench",
+      "type": "npm",
+      "script": "watch",
+      "path": "packages/graphql-workbench",
+      "isBackground": true,
+      "problemMatcher": ["$esbuild-watch"],
+      "group": "build"
+    },
+    {
+      "label": "npm: build all",
+      "type": "npm",
+      "script": "build",
+      "problemMatcher": [],
+      "group": "build"
+    }
+  ]
 }

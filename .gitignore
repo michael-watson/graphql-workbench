@@ -1,6 +1,37 @@
-out
-dist
-node_modules
-.vscode-test/
-*.vsix
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
 .DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Test coverage
+coverage/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Package manager
+.npm
+.yarn
+
+# TypeScript cache
+*.tsbuildinfo
+
+# GGUF model files (too large for GitHub)
+*.gguf

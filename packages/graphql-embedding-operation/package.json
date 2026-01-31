@@ -1,0 +1,51 @@
+{
+  "name": "graphql-embedding-operation",
+  "version": "0.1.0",
+  "description": "Generate dynamic GraphQL operations from embedded schemas",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf dist *.tsbuildinfo",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "graphql",
+    "embedding",
+    "operation",
+    "query",
+    "mutation"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "graphql": "^16.8.1",
+    "graphql-embedding-core": "^0.1.0",
+    "graphql-embedding-parser": "^0.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "typescript": "^5.3.3"
+  },
+  "peerDependencies": {
+    "graphql": "^16.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": ""
+  }
+}

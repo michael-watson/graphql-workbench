@@ -1,0 +1,805 @@
+import * as vscode from "vscode";
+import * as path from "path";
+
+// Type-only imports (these don't generate require() calls)
+import type { Pool } from "pg";
+import type { VectorStore, EmbeddingProvider } from "graphql-embedding-core";
+import type { GraphQLSchema } from "graphql";
+
+// Dynamic import loaders for ESM packages
+async function loadPg() {
+  const pg = await import("pg");
+  return { Pool: pg.Pool };
+}
+
+async function loadGraphQL() {
+  const graphql = await import("graphql");
+  return { buildSchema: graphql.buildSchema };
+}
+
+async function loadPGLite() {
+  const { PGlite } = await import("@electric-sql/pglite");
+  const { vector } = await import("@electric-sql/pglite/vector");
+  return { PGlite, vector };
+}
+
+async function loadLlamaProvider() {
+  const { LlamaEmbeddingProvider } = await import("graphql-embedding");
+  return { LlamaEmbeddingProvider };
+}
+
+async function loadCore() {
+  const core = await import("graphql-embedding-core");
+  return {
+    EmbeddingService: core.EmbeddingService,
+    PGLiteVectorStore: core.PGLiteVectorStore,
+    PostgresVectorStore: core.PostgresVectorStore,
+    OllamaProvider: core.OllamaProvider,
+    OllamaCloudProvider: core.OllamaCloudProvider,
+    OpenAIProvider: core.OpenAIProvider,
+    AnthropicProvider: core.AnthropicProvider,
+  };
+}
+
+async function loadParser() {
+  const parser = await import("graphql-embedding-parser");
+  return { parseSchema: parser.parseSchema };
+}
+
+async function loadOperation() {
+  const operation = await import("graphql-embedding-operation");
+  return {
+    DynamicOperationGenerator: operation.DynamicOperationGenerator,
+  };
+}
+
+async function loadSchemaDesign() {
+  const mod = await import("graphql-embedding-schema-design");
+  return { SchemaDesignAnalyzer: mod.SchemaDesignAnalyzer };
+}
+
+// Use 'any' for runtime instances since we can't use the actual types
+// without triggering require() calls
+type EmbedResult = {
+  embeddedCount: number;
+  skippedCount: number;
+  skippedDocuments: Array<{
+    id: string;
+    name: string;
+    tokenCount: number;
+    maxTokens: number;
+  }>;
+  chunkedCount: number;
+  chunkedDocuments: Array<{
+    name: string;
+    originalTokenCount: number;
+    chunks: number;
+  }>;
+};
+
+type EmbeddingServiceInstance = {
+  initialize(): Promise<void>;
+  embedAndStore(documents: unknown[]): Promise<EmbedResult>;
+  search(query: string, limit: number): Promise<Array<{ document: { name: string; type: string }; score: number }>>;
+  clear(): Promise<void>;
+  count(): Promise<number>;
+  close(): Promise<void>;
+};
+
+type DynamicGeneratedOperation = {
+  operation: string;
+  variables: Record<string, unknown>;
+  operationType: "query" | "mutation" | "subscription";
+  rootField: string;
+  validationAttempts: number;
+};
+
+type GenerationRuntimeOptions = {
+  minSimilarityScore?: number;
+  maxDocuments?: number;
+  maxValidationRetries?: number;
+};
+
+type DynamicOperationGeneratorInstance = {
+  generateDynamicOperation(
+    context: { inputVector: number[]; inputText: string },
+    runtimeOptions?: GenerationRuntimeOptions
+  ): Promise<DynamicGeneratedOperation>;
+};
+
+type LLMProviderInstance = {
+  initialize(): Promise<void>;
+  dispose(): Promise<void>;
+  readonly name: string;
+  readonly model: string;
+};
+
+type SchemaDesignReportResult = {
+  markdown: string;
+  documentCount: number;
+  categories: string[];
+};
+
+export interface StoreInfo {
+  type: "pglite" | "postgres";
+  location: string;
+  tableName: string;
+}
+
+interface InitializedConfig {
+  vectorStore: string;
+  postgresConnectionString: string;
+  modelPath: string;
+  tableName: string;
+}
+
+const DEFAULT_TABLE_NAME = "graphql_embeddings";
+
+export class EmbeddingManager {
+  private context: vscode.ExtensionContext;
+  private outputChannel: vscode.OutputChannel;
+  private embeddingService: EmbeddingServiceInstance | undefined;
+  private embeddingProvider: EmbeddingProvider | undefined;
+  private vectorStore: VectorStore | undefined;
+  private schema: GraphQLSchema | undefined;
+  private dynamicOperationGenerator: DynamicOperationGeneratorInstance | undefined;
+  private llmProvider: LLMProviderInstance | undefined;
+  private pglite: unknown;
+  private pgPool: Pool | undefined;
+  private initialized = false;
+  private schemaSDL: string | undefined;
+  private storeInfo: StoreInfo | undefined;
+  private initializedConfig: InitializedConfig | undefined;
+  private currentTableName: string = DEFAULT_TABLE_NAME;
+
+  constructor(context: vscode.ExtensionContext, outputChannel: vscode.OutputChannel) {
+    this.context = context;
+    this.outputChannel = outputChannel;
+  }
+
+  private log(message: string): void {
+    const timestamp = new Date().toISOString();
+    this.outputChannel.appendLine(`[${timestamp}] ${message}`);
+  }
+
+  private formatDuration(ms: number): string {
+    if (ms < 1000) {
+      return `${ms}ms`;
+    }
+    const totalSeconds = Math.floor(ms / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    const remainingMs = ms % 1000;
+
+    if (minutes > 0) {
+      return `${minutes}m ${seconds}.${Math.floor(remainingMs / 100)}s`;
+    }
+    return `${seconds}.${Math.floor(remainingMs / 100)}s`;
+  }
+
+  private getConfig() {
+    const config = vscode.workspace.getConfiguration("graphqlWorkbench");
+    return {
+      vectorStore: config.get<string>("vectorStore", "pglite"),
+      postgresConnectionString: config.get<string>(
+        "postgresConnectionString",
+        "postgresql://postgres@localhost:5432/postgres"
+      ),
+      modelPath: config.get<string>("modelPath", ""),
+      // LLM configuration
+      llmProvider: config.get<string>("llmProvider", "ollama"),
+      llmModel: config.get<string>("llmModel", ""),
+      ollamaBaseUrl: config.get<string>("ollamaBaseUrl", "http://localhost:11434"),
+      ollamaCloudApiKey: config.get<string>("ollamaCloudApiKey", ""),
+      openaiApiKey: config.get<string>("openaiApiKey", ""),
+      anthropicApiKey: config.get<string>("anthropicApiKey", ""),
+      llmTemperature: config.get<number>("llmTemperature", 0.2),
+      llmTopK: config.get<number>("llmTopK", 40),
+      llmTopP: config.get<number>("llmTopP", 0.9),
+      // Vector search configuration
+      minSimilarityScore: config.get<number>("minSimilarityScore", 0.4),
+      maxDocuments: config.get<number>("maxDocuments", 50),
+      maxValidationRetries: config.get<number>("maxValidationRetries", 5),
+    };
+  }
+
+  getStoreInfo(): StoreInfo | undefined {
+    return this.storeInfo;
+  }
+
+  getTableName(): string {
+    return this.currentTableName;
+  }
+
+  getDefaultTableName(): string {
+    return DEFAULT_TABLE_NAME;
+  }
+
+  async initialize(tableName?: string): Promise<void> {
+    if (this.initialized) {
+      return;
+    }
+
+    const config = this.getConfig();
+    this.currentTableName = tableName ?? DEFAULT_TABLE_NAME;
+
+    // Log configuration for debugging
+    this.log("Configuration:");
+    this.log(`  vectorStore: ${config.vectorStore}`);
+    this.log(`  postgresConnectionString: ${config.postgresConnectionString}`);
+    this.log(`  modelPath: ${config.modelPath || "(default)"}`);
+    this.log(`  tableName: ${this.currentTableName}`);
+
+    await vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: "Initializing GraphQL Workbench",
+        cancellable: false,
+      },
+      async (progress) => {
+        progress.report({ message: "Loading embedding model..." });
+        this.log("Loading embedding model...");
+
+        // Initialize embedding provider
+        const { LlamaEmbeddingProvider } = await loadLlamaProvider();
+        const modelPath = config.modelPath || undefined;
+        const provider = new LlamaEmbeddingProvider({
+          modelPath,
+        });
+        await provider.initialize();
+        this.embeddingProvider = provider;
+        this.log(`Embedding model loaded. Dimensions: ${provider.dimensions}`);
+
+        progress.report({ message: "Connecting to vector store..." });
+
+        const { EmbeddingService, PGLiteVectorStore, PostgresVectorStore } = await loadCore();
+
+        // Initialize vector store based on configuration
+        if (config.vectorStore === "postgres") {
+          const { Pool } = await loadPg();
+          this.pgPool = new Pool({
+            connectionString: config.postgresConnectionString,
+          });
+          this.vectorStore = new PostgresVectorStore({
+            pool: this.pgPool,
+            dimensions: provider.dimensions,
+            tableName: this.currentTableName,
+          });
+          this.storeInfo = {
+            type: "postgres",
+            location: config.postgresConnectionString,
+            tableName: this.currentTableName,
+          };
+          this.log(`Using PostgreSQL vector store: ${config.postgresConnectionString} (table: ${this.currentTableName})`);
+        } else {
+          // Use PGLite with persistent storage in extension storage
+          const { PGlite, vector } = await loadPGLite();
+
+          const dbPath = path.join(
+            this.context.globalStorageUri.fsPath,
+            "embeddings.db"
+          );
+          await vscode.workspace.fs.createDirectory(
+            this.context.globalStorageUri
+          );
+
+          const pgliteInstance = new PGlite(dbPath, {
+            extensions: { vector },
+          });
+          this.pglite = pgliteInstance;
+
+          this.vectorStore = new PGLiteVectorStore({
+            client: pgliteInstance,
+            dimensions: provider.dimensions,
+            tableName: this.currentTableName,
+          });
+          this.storeInfo = {
+            type: "pglite",
+            location: dbPath,
+            tableName: this.currentTableName,
+          };
+          this.log(`Using PGLite vector store: ${dbPath} (table: ${this.currentTableName})`);
+        }
+
+        progress.report({ message: "Initializing embedding service..." });
+
+        // Initialize embedding service
+        this.embeddingService = new EmbeddingService({
+          embeddingProvider: this.embeddingProvider,
+          vectorStore: this.vectorStore,
+        });
+        await this.embeddingService.initialize();
+
+        this.initialized = true;
+        this.initializedConfig = {
+          vectorStore: config.vectorStore,
+          postgresConnectionString: config.postgresConnectionString,
+          modelPath: config.modelPath,
+          tableName: this.currentTableName,
+        };
+        this.log("GraphQL Workbench initialized successfully");
+      }
+    );
+  }
+
+  private hasConfigChanged(tableName?: string): boolean {
+    if (!this.initializedConfig) {
+      return false;
+    }
+    const currentConfig = this.getConfig();
+    const effectiveTableName = tableName ?? this.currentTableName;
+    return (
+      this.initializedConfig.vectorStore !== currentConfig.vectorStore ||
+      this.initializedConfig.postgresConnectionString !== currentConfig.postgresConnectionString ||
+      this.initializedConfig.modelPath !== currentConfig.modelPath ||
+      this.initializedConfig.tableName !== effectiveTableName
+    );
+  }
+
+  async ensureInitialized(tableName?: string): Promise<void> {
+    if (this.initialized && this.hasConfigChanged(tableName)) {
+      this.log("Configuration changed, reinitializing...");
+      await this.dispose();
+    }
+    if (!this.initialized) {
+      await this.initialize(tableName);
+    }
+  }
+
+  /**
+   * Initialize just the dynamic operation generator (without requiring schema SDL).
+   * Used when documents exist in the vector store but generators aren't set up
+   * (e.g., after VS Code restart).
+   */
+  private async initializeDynamicGenerator(): Promise<void> {
+    const config = this.getConfig();
+
+    try {
+      const { DynamicOperationGenerator } = await loadOperation();
+      const { OllamaProvider, OllamaCloudProvider, OpenAIProvider, AnthropicProvider } = await loadCore();
+
+      this.log(`Initializing LLM provider: ${config.llmProvider}...`);
+
+      // Create LLM provider based on configuration
+      let llmProvider: LLMProviderInstance;
+
+      switch (config.llmProvider) {
+        case "openai":
+          if (!config.openaiApiKey) {
+            throw new Error("OpenAI API key is required. Set it in graphqlWorkbench.openaiApiKey");
+          }
+          llmProvider = new OpenAIProvider({
+            apiKey: config.openaiApiKey,
+            model: config.llmModel || undefined,
+            defaultTemperature: config.llmTemperature,
+            topP: config.llmTopP,
+          });
+          break;
+
+        case "anthropic":
+          if (!config.anthropicApiKey) {
+            throw new Error("Anthropic API key is required. Set it in graphqlWorkbench.anthropicApiKey");
+          }
+          llmProvider = new AnthropicProvider({
+            apiKey: config.anthropicApiKey,
+            model: config.llmModel || undefined,
+            defaultTemperature: config.llmTemperature,
+            topK: config.llmTopK,
+            topP: config.llmTopP,
+          });
+          break;
+
+        case "ollama-cloud":
+          if (!config.ollamaCloudApiKey) {
+            throw new Error("Ollama Cloud API key is required. Set it in graphqlWorkbench.ollamaCloudApiKey");
+          }
+          llmProvider = new OllamaCloudProvider({
+            apiKey: config.ollamaCloudApiKey,
+            model: config.llmModel || undefined,
+            defaultTemperature: config.llmTemperature,
+            topK: config.llmTopK,
+            topP: config.llmTopP,
+          });
+          break;
+
+        case "ollama":
+        default:
+          llmProvider = new OllamaProvider({
+            baseUrl: config.ollamaBaseUrl,
+            model: config.llmModel || undefined,
+            defaultTemperature: config.llmTemperature,
+            topK: config.llmTopK,
+            topP: config.llmTopP,
+          });
+          break;
+      }
+
+      await llmProvider.initialize();
+      this.llmProvider = llmProvider;
+      this.log(`LLM provider initialized: ${llmProvider.name} (model: ${llmProvider.model})`);
+
+      // Create dynamic operation generator (without schema - validation will be parse-only)
+      this.dynamicOperationGenerator = new DynamicOperationGenerator({
+        llmProvider: llmProvider as any,
+        vectorStore: this.vectorStore!,
+        // Note: no schema provided, so validation will only check parse correctness
+        minSimilarityScore: config.minSimilarityScore,
+        maxDocuments: config.maxDocuments,
+        maxTypeDepth: 5,
+        maxValidationRetries: config.maxValidationRetries,
+        logger: {
+          log: (message: string) => this.log(message),
+        },
+      });
+      this.log("Dynamic operation generator initialized (without schema validation)");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.log(`WARNING: Failed to initialize dynamic generator: ${message}`);
+    }
+  }
+
+  async embedSchema(schemaSDL: string, tableName?: string): Promise<EmbedResult & { totalDocuments: number; durationMs: number }> {
+    const totalStartTime = Date.now();
+    await this.ensureInitialized(tableName);
+
+    const config = this.getConfig();
+    const { buildSchema } = await loadGraphQL();
+    const { parseSchema } = await loadParser();
+    const { DynamicOperationGenerator } = await loadOperation();
+    const { OllamaProvider, OllamaCloudProvider, OpenAIProvider, AnthropicProvider } = await loadCore();
+
+    this.log("Parsing GraphQL schema...");
+    const parseStartTime = Date.now();
+    // parseSchema now accepts raw schema string and handles stripping/parsing internally
+    const documents = parseSchema(schemaSDL);
+    const parseDuration = Date.now() - parseStartTime;
+    this.log(`Parsed ${documents.length} documents from schema (${parseDuration}ms)`);
+
+    this.log("Embedding documents...");
+    const embedStartTime = Date.now();
+    const result = await this.embeddingService!.embedAndStore(documents);
+    const embedDuration = Date.now() - embedStartTime;
+
+    // Log info for chunked documents
+    if (result.chunkedCount > 0) {
+      this.log(`INFO: ${result.chunkedCount} documents were chunked to fit within token limit`);
+      for (const chunked of result.chunkedDocuments) {
+        this.log(`  - ${chunked.name}: ${chunked.originalTokenCount} tokens split into ${chunked.chunks} chunks`);
+      }
+    }
+
+    // Log warnings for skipped documents
+    if (result.skippedCount > 0) {
+      this.log(`WARNING: ${result.skippedCount} documents skipped due to token limit`);
+      for (const skipped of result.skippedDocuments) {
+        this.log(`  - ${skipped.name} (${skipped.id}): ${skipped.tokenCount} tokens exceeds max of ${skipped.maxTokens}`);
+      }
+    }
+
+    const totalDuration = Date.now() - totalStartTime;
+    this.log(`Successfully embedded ${result.embeddedCount} documents (${result.chunkedCount} chunked, ${result.skippedCount} skipped) in ${this.formatDuration(embedDuration)}`);
+    this.log(`Total time: ${this.formatDuration(totalDuration)} (parsing: ${this.formatDuration(parseDuration)}, embedding: ${this.formatDuration(embedDuration)})`);
+
+    // Store the schema for operation generation
+    this.schema = buildSchema(schemaSDL);
+    this.schemaSDL = schemaSDL;
+
+    // Initialize dynamic operation generator
+    try {
+      this.log(`Initializing LLM provider: ${config.llmProvider}...`);
+
+      // Create LLM provider based on configuration
+      let llmProvider: LLMProviderInstance;
+
+      switch (config.llmProvider) {
+        case "openai":
+          if (!config.openaiApiKey) {
+            throw new Error("OpenAI API key is required. Set it in graphqlWorkbench.openaiApiKey");
+          }
+          llmProvider = new OpenAIProvider({
+            apiKey: config.openaiApiKey,
+            model: config.llmModel || undefined,
+            defaultTemperature: config.llmTemperature,
+          });
+          break;
+
+        case "anthropic":
+          if (!config.anthropicApiKey) {
+            throw new Error("Anthropic API key is required. Set it in graphqlWorkbench.anthropicApiKey");
+          }
+          llmProvider = new AnthropicProvider({
+            apiKey: config.anthropicApiKey,
+            model: config.llmModel || undefined,
+            defaultTemperature: config.llmTemperature,
+          });
+          break;
+
+        case "ollama-cloud":
+          if (!config.ollamaCloudApiKey) {
+            throw new Error("Ollama Cloud API key is required. Set it in graphqlWorkbench.ollamaCloudApiKey");
+          }
+          llmProvider = new OllamaCloudProvider({
+            apiKey: config.ollamaCloudApiKey,
+            model: config.llmModel || undefined,
+            defaultTemperature: config.llmTemperature,
+          });
+          break;
+
+        case "ollama":
+        default:
+          llmProvider = new OllamaProvider({
+            baseUrl: config.ollamaBaseUrl,
+            model: config.llmModel || undefined,
+            defaultTemperature: config.llmTemperature,
+          });
+          break;
+      }
+
+      await llmProvider.initialize();
+      this.llmProvider = llmProvider;
+      this.log(`LLM provider initialized: ${llmProvider.name} (model: ${llmProvider.model})`);
+
+      // Create dynamic operation generator with logger
+      this.dynamicOperationGenerator = new DynamicOperationGenerator({
+        llmProvider: llmProvider as any,
+        vectorStore: this.vectorStore!,
+        schema: this.schema,
+        minSimilarityScore: config.minSimilarityScore,
+        maxDocuments: config.maxDocuments,
+        maxTypeDepth: 5,
+        maxValidationRetries: config.maxValidationRetries,
+        logger: {
+          log: (message: string) => this.log(message),
+        },
+      });
+      this.log("Dynamic operation generator initialized");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.log(`WARNING: Failed to initialize LLM provider: ${message}`);
+      this.dynamicOperationGenerator = undefined;
+      this.llmProvider = undefined;
+    }
+
+    if (this.storeInfo) {
+      this.log(`Vector store location: ${this.storeInfo.location}`);
+    }
+
+    return {
+      totalDocuments: documents.length,
+      embeddedCount: result.embeddedCount,
+      skippedCount: result.skippedCount,
+      skippedDocuments: result.skippedDocuments,
+      chunkedCount: result.chunkedCount,
+      chunkedDocuments: result.chunkedDocuments,
+      durationMs: totalDuration,
+    };
+  }
+
+  async generateOperation(
+    query: string,
+    tableName?: string
+  ): Promise<{
+    operation: string;
+    fields: string[];
+    variables?: Record<string, unknown>;
+    operationType?: string;
+    rootField?: string;
+    validationAttempts?: number;
+  } | undefined> {
+    await this.ensureInitialized(tableName);
+
+    // Check if generator needs to be initialized (e.g., after VS Code restart)
+    if (!this.dynamicOperationGenerator) {
+      const docCount = await this.embeddingService!.count();
+
+      if (docCount === 0) {
+        vscode.window.showWarningMessage(
+          "No schema embedded yet. Please embed a schema first."
+        );
+        return undefined;
+      }
+
+      // Documents exist but generators aren't initialized - initialize dynamic generator
+      this.log(`Found ${docCount} documents in table, initializing dynamic generator...`);
+      await this.initializeDynamicGenerator();
+
+      if (!this.dynamicOperationGenerator) {
+        vscode.window.showWarningMessage(
+          "Could not initialize operation generator. Please re-embed the schema."
+        );
+        return undefined;
+      }
+    }
+
+    // Read config fresh so settings changes take effect immediately
+    const config = this.getConfig();
+
+    this.log(`Generating operation for: "${query}"`);
+    this.log(`Current settings: minSimilarityScore=${config.minSimilarityScore}, maxDocuments=${config.maxDocuments}, maxValidationRetries=${config.maxValidationRetries}, temperature=${config.llmTemperature}`);
+
+    if (!this.dynamicOperationGenerator || !this.embeddingProvider) {
+      vscode.window.showWarningMessage(
+        "Operation generator not available. Please re-embed the schema."
+      );
+      return undefined;
+    }
+
+    this.log("Embedding user input...");
+    const inputVector = await this.embeddingProvider.embed(query);
+
+    // Generate operation using the dynamic generator with current settings
+    const result = await this.dynamicOperationGenerator.generateDynamicOperation(
+      {
+        inputVector,
+        inputText: query,
+      },
+      {
+        minSimilarityScore: config.minSimilarityScore,
+        maxDocuments: config.maxDocuments,
+        maxValidationRetries: config.maxValidationRetries,
+      }
+    );
+
+    this.log(`Generated ${result.operationType} operation for field: ${result.rootField}`);
+    this.log(`Validation attempts: ${result.validationAttempts}`);
+
+    if (Object.keys(result.variables).length > 0) {
+      this.log(`Variables: ${JSON.stringify(result.variables, null, 2)}`);
+    }
+
+    return {
+      operation: result.operation,
+      fields: [result.rootField],
+      variables: result.variables,
+      operationType: result.operationType,
+      rootField: result.rootField,
+      validationAttempts: result.validationAttempts,
+    };
+  }
+
+  async searchDocuments(
+    query: string,
+    limit = 10
+  ): Promise<Array<{ name: string; type: string; score: number }>> {
+    await this.ensureInitialized();
+
+    const results = await this.embeddingService!.search(query, limit);
+    return results.map((r) => ({
+      name: r.document.name,
+      type: r.document.type,
+      score: r.score,
+    }));
+  }
+
+  async clearEmbeddings(): Promise<void> {
+    await this.ensureInitialized();
+    this.log("Clearing all embeddings...");
+    await this.embeddingService!.clear();
+    this.schema = undefined;
+    this.schemaSDL = undefined;
+    this.dynamicOperationGenerator = undefined;
+    if (this.llmProvider) {
+      await this.llmProvider.dispose();
+      this.llmProvider = undefined;
+    }
+    this.log("All embeddings cleared");
+  }
+
+  async getDocumentCount(tableName?: string): Promise<number> {
+    await this.ensureInitialized(tableName);
+    return this.embeddingService!.count();
+  }
+
+  async analyzeSchemaDesign(tableName?: string): Promise<SchemaDesignReportResult> {
+    await this.ensureInitialized(tableName);
+
+    const config = this.getConfig();
+    const { OllamaProvider, OllamaCloudProvider, OpenAIProvider, AnthropicProvider } = await loadCore();
+    const { SchemaDesignAnalyzer } = await loadSchemaDesign();
+
+    this.log("Initializing LLM provider for schema design analysis...");
+
+    // Create a dedicated LLM provider instance
+    let llmProvider: LLMProviderInstance;
+
+    switch (config.llmProvider) {
+      case "openai":
+        if (!config.openaiApiKey) {
+          throw new Error("OpenAI API key is required. Set it in graphqlWorkbench.openaiApiKey");
+        }
+        llmProvider = new OpenAIProvider({
+          apiKey: config.openaiApiKey,
+          model: config.llmModel || undefined,
+          defaultTemperature: config.llmTemperature,
+          topP: config.llmTopP,
+        });
+        break;
+
+      case "anthropic":
+        if (!config.anthropicApiKey) {
+          throw new Error("Anthropic API key is required. Set it in graphqlWorkbench.anthropicApiKey");
+        }
+        llmProvider = new AnthropicProvider({
+          apiKey: config.anthropicApiKey,
+          model: config.llmModel || undefined,
+          defaultTemperature: config.llmTemperature,
+          topK: config.llmTopK,
+          topP: config.llmTopP,
+        });
+        break;
+
+      case "ollama-cloud":
+        if (!config.ollamaCloudApiKey) {
+          throw new Error("Ollama Cloud API key is required. Set it in graphqlWorkbench.ollamaCloudApiKey");
+        }
+        llmProvider = new OllamaCloudProvider({
+          apiKey: config.ollamaCloudApiKey,
+          model: config.llmModel || undefined,
+          defaultTemperature: config.llmTemperature,
+          topK: config.llmTopK,
+          topP: config.llmTopP,
+        });
+        break;
+
+      case "ollama":
+      default:
+        llmProvider = new OllamaProvider({
+          baseUrl: config.ollamaBaseUrl,
+          model: config.llmModel || undefined,
+          defaultTemperature: config.llmTemperature,
+          topK: config.llmTopK,
+          topP: config.llmTopP,
+        });
+        break;
+    }
+
+    await llmProvider.initialize();
+    this.log(`LLM provider initialized: ${llmProvider.name} (model: ${llmProvider.model})`);
+
+    try {
+      const dimensions = this.embeddingProvider
+        ? (this.embeddingProvider as any).dimensions
+        : 384; // fallback default
+
+      const analyzer = new SchemaDesignAnalyzer({
+        vectorStore: this.vectorStore!,
+        llmProvider: llmProvider as any,
+        dimensions,
+      });
+
+      this.log("Running schema design analysis...");
+      const result = await analyzer.analyze();
+      this.log(`Analysis complete: ${result.documentCount} documents, ${result.categories.length} categories`);
+
+      return result;
+    } finally {
+      await llmProvider.dispose();
+    }
+  }
+
+  async dispose(): Promise<void> {
+    // Note: embeddingService.close() calls vectorStore.close() which handles
+    // closing the pg pool or pglite instance, so we don't close them directly
+    if (this.embeddingService) {
+      await this.embeddingService.close();
+    }
+    if (this.embeddingProvider && typeof (this.embeddingProvider as any).dispose === "function") {
+      await (this.embeddingProvider as any).dispose();
+    }
+    if (this.llmProvider) {
+      await this.llmProvider.dispose();
+    }
+    this.initialized = false;
+    this.embeddingService = undefined;
+    this.embeddingProvider = undefined;
+    this.vectorStore = undefined;
+    this.schema = undefined;
+    this.schemaSDL = undefined;
+    this.dynamicOperationGenerator = undefined;
+    this.llmProvider = undefined;
+    this.pglite = undefined;
+    this.pgPool = undefined;
+    this.storeInfo = undefined;
+    this.initializedConfig = undefined;
+  }
+}

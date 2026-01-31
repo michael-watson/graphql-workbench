@@ -1,0 +1,1674 @@
+type AgenciesPaginationInfo {
+  count: Int!
+  next: String
+  previous: String
+}
+type AgenciesResult {
+  pagination: AgenciesPaginationInfo!
+  results: [Agency!]!
+}
+type Agency {
+  id: Int!
+  url: String
+  name: String!
+  abbrev: String
+  type: AgencyTypeRef
+  featured: Boolean
+  country: [AgencyCountry]
+  description: String
+  administrator: String
+  foundingYear: Int
+  launchers: String
+  spacecraft: String
+  parent: String
+  image: AgencyImage
+  logo: AgencyImage
+  socialLogo: AgencyImage
+  totalLaunchCount: Int
+  consecutiveSuccessfulLaunches: Int
+  successfulLaunches: Int
+  failedLaunches: Int
+  pendingLaunches: Int
+  consecutiveSuccessfulLandings: Int
+  successfulLandings: Int
+  failedLandings: Int
+  attemptedLandings: Int
+  successfulLandingsSpacecraft: Int
+  failedLandingsSpacecraft: Int
+  attemptedLandingsSpacecraft: Int
+  successfulLandingsPayload: Int
+  failedLandingsPayload: Int
+  attemptedLandingsPayload: Int
+  infoUrl: String
+  wikiUrl: String
+  socialMediaLinks: [AgencySocialMediaLink]
+}
+type AgencyCountry {
+  id: Int!
+  name: String
+  alpha2Code: String
+  alpha3Code: String
+  nationalityName: String
+  nationalitySingularName: String
+}
+type AgencyImage {
+  id: Int!
+  name: String
+  imageUrl: String
+  thumbnailUrl: String
+  credit: String
+  license: AgencyImageLicense
+  singleUse: Boolean
+}
+type AgencyImageLicense {
+  id: Int!
+  name: String
+  priority: Int
+  link: String
+}
+type AgencySocialMediaLink {
+  id: Int!
+  socialMediaSite: String
+  url: String
+}
+type AgencyType {
+  id: Int!
+  name: String
+}
+type AgencyTypeRef {
+  id: Int!
+  name: String
+}
+type AgencyTypesResult {
+  pagination: ConfigPaginationInfo!
+  results: [AgencyType!]!
+}
+type ApiThrottle {
+  yourRequestLimit: Int!
+  limitFrequencySecs: Int!
+  currentUse: Int!
+  nextUseSecs: Int!
+  ident: String!
+}
+type Astronaut {
+  id: Int!
+  url: String
+  name: String!
+  status: AstronautStatusRef
+  type: AstronautTypeRef
+  inSpace: Boolean
+  timeInSpace: String
+  evaTime: String
+  age: Int
+  dateOfBirth: String
+  dateOfDeath: String
+  nationality: [AstronautCountry]
+  bio: String
+  wiki: String
+  lastFlight: String
+  firstFlight: String
+  image: AstronautImage
+  agency: Agency
+  socialMediaLinks: [AstronautSocialMediaLink]
+  flightsCount: Int
+  landingsCount: Int
+  spacewalksCount: Int
+}
+type AstronautCountry {
+  id: Int!
+  name: String
+  alpha2Code: String
+  alpha3Code: String
+  nationalityName: String
+  nationalitySingularName: String
+}
+type AstronautImage {
+  id: Int!
+  name: String
+  imageUrl: String
+  thumbnailUrl: String
+  credit: String
+}
+type AstronautRole {
+  id: Int!
+  role: String
+  priority: Int
+}
+type AstronautRolesResult {
+  pagination: ConfigPaginationInfo!
+  results: [AstronautRole!]!
+}
+type AstronautSocialMediaLink {
+  id: Int!
+  socialMediaSite: String
+  url: String
+}
+type AstronautsPaginationInfo {
+  count: Int!
+  next: String
+  previous: String
+}
+type AstronautsResult {
+  pagination: AstronautsPaginationInfo!
+  results: [Astronaut!]!
+}
+type AstronautStatus {
+  id: Int!
+  name: String
+}
+type AstronautStatusesResult {
+  pagination: ConfigPaginationInfo!
+  results: [AstronautStatus!]!
+}
+type AstronautStatusRef {
+  id: Int!
+  name: String
+}
+type AstronautType {
+  id: Int!
+  name: String
+}
+type AstronautTypeRef {
+  id: Int!
+  name: String
+}
+type AstronautTypesResult {
+  pagination: ConfigPaginationInfo!
+  results: [AstronautType!]!
+}
+type CelestialBodiesResult {
+  pagination: LocationsPaginationInfo!
+  results: [CelestialBody!]!
+}
+type CelestialBody {
+  id: Int!
+  url: String
+  name: String!
+  type: CelestialBodyTypeRef
+  diameter: Float
+  mass: Float
+  gravity: Float
+  lengthOfDay: Float
+  atmosphere: String
+}
+type CelestialBodyType {
+  id: Int!
+  name: String
+}
+type CelestialBodyTypeRef {
+  id: Int!
+  name: String
+}
+type CelestialBodyTypesResult {
+  pagination: ConfigPaginationInfo!
+  results: [CelestialBodyType!]!
+}
+type ConfigCountry {
+  id: Int!
+  name: String
+  alpha2Code: String
+  alpha3Code: String
+  nationalityName: String
+  nationalitySingularName: String
+}
+type ConfigImageLicense {
+  id: Int!
+  name: String
+  priority: Int
+  link: String
+}
+type ConfigInfoURLType {
+  id: Int!
+  name: String
+}
+type ConfigLanguage {
+  id: Int!
+  name: String
+  code: String
+}
+type ConfigPaginationInfo {
+  count: Int!
+  next: String
+  previous: String
+}
+type ConfigVidURLType {
+  id: Int!
+  name: String
+}
+type CountriesResult {
+  pagination: ConfigPaginationInfo!
+  results: [ConfigCountry!]!
+}
+type DockingEvent {
+  id: Int!
+  url: String
+  docking: String
+  departure: String
+  flightVehicle: DockingEventFlightVehicle
+  dockingLocation: DockingEventLocation
+  spacestation: DockingEventSpaceStation
+}
+type DockingEventFlightVehicle {
+  id: Int!
+  url: String
+  destination: String
+  missionEnd: String
+  spacecraft: DockingEventSpacecraft
+}
+type DockingEventLocation {
+  id: Int!
+  name: String
+}
+type DockingEventSpacecraft {
+  id: Int!
+  url: String
+  name: String
+  serialNumber: String
+  status: DockingEventSpacecraftStatus
+}
+type DockingEventSpacecraftStatus {
+  id: Int!
+  name: String
+}
+type DockingEventSpaceStation {
+  id: Int!
+  url: String
+  name: String
+  status: SpaceStationStatusRef
+}
+type DockingEventsResult {
+  pagination: SpaceStationsPaginationInfo!
+  results: [DockingEvent!]!
+}
+type DockingLocation {
+  id: Int!
+  name: String
+}
+type DockingLocationsResult {
+  pagination: ConfigPaginationInfo!
+  results: [DockingLocation!]!
+}
+type Event {
+  id: Int!
+  url: String
+  name: String!
+  slug: String
+  type: EventTypeRef
+  description: String
+  webcastLive: Boolean
+  location: String
+  date: String
+  datePrecision: EventDatePrecision
+  duration: String
+  image: EventImage
+  infoUrls: [EventInfoURL]
+  vidUrls: [EventVidURL]
+  lastUpdated: String
+}
+type EventDatePrecision {
+  id: Int!
+  name: String
+  abbrev: String
+  description: String
+}
+type EventImage {
+  id: Int!
+  name: String
+  imageUrl: String
+  thumbnailUrl: String
+  credit: String
+}
+type EventInfoURL {
+  priority: Int
+  source: String
+  title: String
+  description: String
+  featureImage: String
+  url: String
+}
+type EventsPaginationInfo {
+  count: Int!
+  next: String
+  previous: String
+}
+type EventsResult {
+  pagination: EventsPaginationInfo!
+  results: [Event!]!
+}
+type EventType {
+  id: Int!
+  name: String
+}
+type EventTypeRef {
+  id: Int!
+  name: String
+}
+type EventTypesResult {
+  pagination: ConfigPaginationInfo!
+  results: [EventType!]!
+}
+type EventVidURL {
+  priority: Int
+  source: String
+  publisher: String
+  title: String
+  description: String
+  featureImage: String
+  url: String
+}
+type Expedition {
+  id: Int!
+  url: String
+  name: String!
+  start: String
+  end: String
+  spacestation: ExpeditionSpaceStation
+  missionPatches: [ExpeditionMissionPatch]
+  crew: [ExpeditionCrewMember]
+}
+type ExpeditionAstronaut {
+  id: Int!
+  url: String
+  name: String
+  status: ExpeditionAstronautStatus
+  type: ExpeditionAstronautType
+  dateOfBirth: String
+  dateOfDeath: String
+  bio: String
+  wiki: String
+  agency: ExpeditionAstronautAgency
+  image: ExpeditionAstronautImage
+}
+type ExpeditionAstronautAgency {
+  id: Int!
+  url: String
+  name: String
+  abbrev: String
+}
+type ExpeditionAstronautImage {
+  id: Int!
+  name: String
+  imageUrl: String
+  thumbnailUrl: String
+}
+type ExpeditionAstronautStatus {
+  id: Int!
+  name: String
+}
+type ExpeditionAstronautType {
+  id: Int!
+  name: String
+}
+type ExpeditionCrewMember {
+  id: Int!
+  role: ExpeditionCrewRole
+  astronaut: ExpeditionAstronaut
+}
+type ExpeditionCrewRole {
+  id: Int!
+  role: String
+  priority: Int
+}
+type ExpeditionMissionPatch {
+  id: Int!
+  name: String
+  priority: Int
+  imageUrl: String
+}
+type ExpeditionSpaceStation {
+  id: Int!
+  url: String
+  name: String
+  status: SpaceStationStatusRef
+  orbit: String
+}
+type ExpeditionsResult {
+  pagination: SpaceStationsPaginationInfo!
+  results: [Expedition!]!
+}
+type FirstStageType {
+  id: Int!
+  name: String
+}
+type FirstStageTypesResult {
+  pagination: ConfigPaginationInfo!
+  results: [FirstStageType!]!
+}
+type ImageLicensesResult {
+  pagination: ConfigPaginationInfo!
+  results: [ConfigImageLicense!]!
+}
+type ImageVariantType {
+  id: Int!
+  name: String
+}
+type ImageVariantTypesResult {
+  pagination: ConfigPaginationInfo!
+  results: [ImageVariantType!]!
+}
+type InfoURLTypesResult {
+  pagination: ConfigPaginationInfo!
+  results: [ConfigInfoURLType!]!
+}
+type Landing {
+  id: Int!
+  url: String
+  attempt: Boolean
+  success: Boolean
+  description: String
+  landing: LandingInfo
+  type: LandingTypeRef
+  location: LandingLocationRef
+}
+type LandingInfo {
+  id: Int!
+  name: String
+  abbrev: String
+  description: String
+}
+type LandingLocation {
+  id: Int!
+  name: String
+  abbrev: String
+  description: String
+  location: LandingLocationLocation
+  successfulLandings: Int
+}
+type LandingLocationLocation {
+  id: Int!
+  url: String
+  name: String
+  countryCode: String
+  mapImage: String
+  timezone: String
+  totalLaunchCount: Int
+  totalLandingCount: Int
+}
+type LandingLocationRef {
+  id: Int!
+  name: String
+  abbrev: String
+  description: String
+}
+type LandingLocationsResult {
+  pagination: ConfigPaginationInfo!
+  results: [LandingLocation!]!
+}
+type LandingsResult {
+  pagination: LocationsPaginationInfo!
+  results: [Landing!]!
+}
+type LandingType {
+  id: Int!
+  name: String
+  abbrev: String
+  description: String
+}
+type LandingTypeRef {
+  id: Int!
+  name: String
+  abbrev: String
+  description: String
+}
+type LandingTypesResult {
+  pagination: ConfigPaginationInfo!
+  results: [LandingType!]!
+}
+type LanguagesResult {
+  pagination: ConfigPaginationInfo!
+  results: [ConfigLanguage!]!
+}
+type Launch {
+  id: ID!
+  url: String
+  name: String
+  slug: String
+  launchDesignator: String
+  status: LaunchStatusRef
+  lastUpdated: String
+  net: String
+  netPrecision: LaunchNetPrecision
+  windowEnd: String
+  windowStart: String
+  image: LaunchImage
+  infographic: String
+  probability: Int
+  weatherConcerns: String
+  failreason: String
+  hashtag: String
+  launchServiceProvider: Agency
+  rocket: LaunchRocket
+  mission: LaunchMission
+  pad: Pad
+  webcastLive: Boolean
+  program: [Program]
+  orbitalLaunchAttemptCount: Int
+  locationLaunchAttemptCount: Int
+  padLaunchAttemptCount: Int
+  agencyLaunchAttemptCount: Int
+  orbitalLaunchAttemptCountYear: Int
+  locationLaunchAttemptCountYear: Int
+  padLaunchAttemptCountYear: Int
+  agencyLaunchAttemptCountYear: Int
+}
+type Launcher {
+  id: Int!
+  url: String
+  serialNumber: String
+  status: LauncherStatusRef
+  details: String
+  launcherConfig: LauncherConfigRef
+  image: LauncherImage
+  flights: Int
+  lastLaunchDate: String
+  firstLaunchDate: String
+  flightProven: Boolean
+}
+type LauncherConfigFamily {
+  id: Int!
+  name: String
+}
+type LauncherConfigImage {
+  id: Int!
+  name: String
+  imageUrl: String
+  thumbnailUrl: String
+}
+type LauncherConfigManufacturer {
+  id: Int!
+  url: String
+  name: String
+  abbrev: String
+  type: LauncherConfigManufacturerType
+}
+type LauncherConfigManufacturerType {
+  id: Int!
+  name: String
+}
+type LauncherConfigProgram {
+  id: Int!
+  url: String
+  name: String
+  description: String
+}
+type LauncherConfigRef {
+  id: Int!
+  url: String
+  name: String
+  fullName: String
+  variant: String
+  active: Boolean
+  reusable: Boolean
+}
+type LauncherConfiguration {
+  id: Int!
+  url: String
+  name: String!
+  fullName: String
+  variant: String
+  active: Boolean
+  isPlaceholder: Boolean
+  reusable: Boolean
+  description: String
+  families: [LauncherConfigFamily]
+  manufacturer: LauncherConfigManufacturer
+  program: [LauncherConfigProgram]
+  image: LauncherConfigImage
+  infoUrl: String
+  wikiUrl: String
+  minStage: Int
+  maxStage: Int
+  length: Float
+  diameter: Float
+  maidenFlight: String
+  launchMass: Int
+  leoCapacity: Int
+  gtoCapacity: Int
+  toThrust: Int
+  apogee: Int
+  vehicleRange: Int
+  totalLaunchCount: Int
+  consecutiveSuccessfulLaunches: Int
+  successfulLaunches: Int
+  failedLaunches: Int
+  pendingLaunches: Int
+  attemptedLandings: Int
+  successfulLandings: Int
+  failedLandings: Int
+  consecutiveSuccessfulLandings: Int
+}
+type LauncherConfigurationFamiliesResult {
+  pagination: LaunchersPaginationInfo!
+  results: [LauncherConfigurationFamily!]!
+}
+type LauncherConfigurationFamily {
+  id: Int!
+  url: String
+  name: String!
+  variant: String
+}
+type LauncherConfigurationsResult {
+  pagination: LaunchersPaginationInfo!
+  results: [LauncherConfiguration!]!
+}
+type LauncherImage {
+  id: Int!
+  name: String
+  imageUrl: String
+  thumbnailUrl: String
+  credit: String
+}
+type LaunchersPaginationInfo {
+  count: Int!
+  next: String
+  previous: String
+}
+type LaunchersResult {
+  pagination: LaunchersPaginationInfo!
+  results: [Launcher!]!
+}
+type LauncherStatus {
+  id: Int!
+  name: String
+}
+type LauncherStatusesResult {
+  pagination: ConfigPaginationInfo!
+  results: [LauncherStatus!]!
+}
+type LauncherStatusRef {
+  id: Int!
+  name: String
+}
+type LaunchesPaginationInfo {
+  count: Int!
+  next: String
+  previous: String
+}
+type LaunchesResult {
+  pagination: LaunchesPaginationInfo!
+  results: [Launch!]!
+}
+type LaunchImage {
+  id: Int!
+  name: String
+  imageUrl: String
+  thumbnailUrl: String
+  credit: String
+}
+type LaunchMission {
+  id: Int!
+  name: String
+  description: String
+  type: String
+  orbit: LaunchMissionOrbit
+}
+type LaunchMissionOrbit {
+  id: Int!
+  name: String
+  abbrev: String
+}
+type LaunchNetPrecision {
+  id: Int!
+  name: String
+  abbrev: String
+  description: String
+}
+type LaunchRocket {
+  id: Int!
+  configuration: LaunchRocketConfiguration
+}
+type LaunchRocketConfiguration {
+  id: Int!
+  url: String
+  name: String
+  fullName: String
+  variant: String
+}
+type LaunchStatus {
+  id: Int!
+  name: String
+  abbrev: String
+  description: String
+}
+type LaunchStatusesResult {
+  pagination: ConfigPaginationInfo!
+  results: [LaunchStatus!]!
+}
+type LaunchStatusRef {
+  id: Int!
+  name: String
+  abbrev: String
+  description: String
+}
+type Location {
+  id: Int!
+  url: String
+  name: String!
+  countryCode: String
+  description: String
+  mapImage: String
+  timezone: String
+  totalLaunchCount: Int
+  totalLandingCount: Int
+  pads: [LocationPad]
+}
+type LocationPad {
+  id: Int!
+  url: String
+  name: String
+  mapUrl: String
+  latitude: String
+  longitude: String
+  totalLaunchCount: Int
+}
+type LocationsPaginationInfo {
+  count: Int!
+  next: String
+  previous: String
+}
+type LocationsResult {
+  pagination: LocationsPaginationInfo!
+  results: [Location!]!
+}
+type MissionPatchAgencyRef {
+  id: Int!
+  url: String
+  name: String
+  type: String
+}
+type MissionPatchEntity {
+  id: Int!
+  name: String!
+  priority: Int
+  imageUrl: String
+  agency: MissionPatchAgencyRef
+}
+type MissionPatchesResult {
+  pagination: LocationsPaginationInfo!
+  results: [MissionPatchEntity!]!
+}
+type MissionType {
+  id: Int!
+  name: String
+}
+type MissionTypesResult {
+  pagination: ConfigPaginationInfo!
+  results: [MissionType!]!
+}
+type NetPrecision {
+  id: Int!
+  name: String
+  abbrev: String
+  description: String
+}
+type NetPrecisionsResult {
+  pagination: ConfigPaginationInfo!
+  results: [NetPrecision!]!
+}
+type NoticeType {
+  id: Int!
+  name: String
+}
+type NoticeTypesResult {
+  pagination: ConfigPaginationInfo!
+  results: [NoticeType!]!
+}
+type Orbit {
+  id: Int!
+  name: String
+  abbrev: String
+}
+type OrbitsResult {
+  pagination: ConfigPaginationInfo!
+  results: [Orbit!]!
+}
+type Pad {
+  id: Int!
+  url: String
+  name: String!
+  description: String
+  mapUrl: String
+  latitude: String
+  longitude: String
+  location: Location
+  mapImage: String
+  totalLaunchCount: Int
+  orbitalLaunchAttemptCount: Int
+}
+type PadsResult {
+  pagination: LocationsPaginationInfo!
+  results: [Pad!]!
+}
+type Payload {
+  id: Int!
+  url: String
+  name: String!
+  type: PayloadTypeRef
+  description: String
+  mass: Float
+  totalCount: Int
+}
+type PayloadFlight {
+  id: Int!
+  url: String
+  payload: PayloadFlightPayload
+}
+type PayloadFlightPayload {
+  id: Int!
+  url: String
+  name: String
+  type: PayloadTypeRef
+  description: String
+  mass: Float
+  totalCount: Int
+}
+type PayloadFlightsResult {
+  pagination: LocationsPaginationInfo!
+  results: [PayloadFlight!]!
+}
+type PayloadsResult {
+  pagination: LocationsPaginationInfo!
+  results: [Payload!]!
+}
+type PayloadType {
+  id: Int!
+  name: String
+}
+type PayloadTypeRef {
+  id: Int!
+  name: String
+}
+type PayloadTypesResult {
+  pagination: ConfigPaginationInfo!
+  results: [PayloadType!]!
+}
+type Program {
+  id: Int!
+  url: String
+  name: String!
+  description: String
+  startDate: String
+  endDate: String
+  image: ProgramImage
+  agencies: [Agency]
+  infoUrl: String
+  wikiUrl: String
+  missionPatches: [ProgramMissionPatch]
+}
+type ProgramImage {
+  id: Int!
+  name: String
+  imageUrl: String
+  thumbnailUrl: String
+}
+type ProgramMissionPatch {
+  id: Int!
+  name: String
+  priority: Int
+  imageUrl: String
+}
+type ProgramsResult {
+  pagination: LocationsPaginationInfo!
+  results: [Program!]!
+}
+type ProgramType {
+  id: Int!
+  name: String
+}
+type ProgramTypesResult {
+  pagination: ConfigPaginationInfo!
+  results: [ProgramType!]!
+}
+type Query {
+  agencies(
+    limit: Int
+    offset: Int
+    search: String
+    ordering: String
+    abbrev: String
+    name: String
+    featured: Boolean
+    countryCode: String
+  ): AgenciesResult
+  agency(id: Int!): Agency
+  astronauts(
+    limit: Int
+    offset: Int
+    search: String
+    ordering: String
+    name: String
+    nationality: String
+    inSpace: Boolean
+    statusId: Int
+    agencyId: Int
+  ): AstronautsResult
+  astronaut(id: Int!): Astronaut
+  agencyTypes(limit: Int, offset: Int): AgencyTypesResult
+  agencyType(id: Int!): AgencyType
+  astronautRoles(limit: Int, offset: Int): AstronautRolesResult
+  astronautRole(id: Int!): AstronautRole
+  astronautStatuses(limit: Int, offset: Int): AstronautStatusesResult
+  astronautStatus(id: Int!): AstronautStatus
+  astronautTypes(limit: Int, offset: Int): AstronautTypesResult
+  astronautType(id: Int!): AstronautType
+  celestialBodyTypes(limit: Int, offset: Int): CelestialBodyTypesResult
+  celestialBodyType(id: Int!): CelestialBodyType
+  countries(limit: Int, offset: Int): CountriesResult
+  country(id: Int!): ConfigCountry
+  dockingLocations(limit: Int, offset: Int): DockingLocationsResult
+  dockingLocation(id: Int!): DockingLocation
+  eventTypes(limit: Int, offset: Int): EventTypesResult
+  eventType(id: Int!): EventType
+  firstStageTypes(limit: Int, offset: Int): FirstStageTypesResult
+  firstStageType(id: Int!): FirstStageType
+  imageLicenses(limit: Int, offset: Int): ImageLicensesResult
+  imageLicense(id: Int!): ConfigImageLicense
+  imageVariantTypes(limit: Int, offset: Int): ImageVariantTypesResult
+  imageVariantType(id: Int!): ImageVariantType
+  infoUrlTypes(limit: Int, offset: Int): InfoURLTypesResult
+  infoUrlType(id: Int!): ConfigInfoURLType
+  landingLocations(limit: Int, offset: Int): LandingLocationsResult
+  landingLocationConfig(id: Int!): LandingLocation
+  landingTypes(limit: Int, offset: Int): LandingTypesResult
+  landingType(id: Int!): LandingType
+  languages(limit: Int, offset: Int): LanguagesResult
+  language(id: Int!): ConfigLanguage
+  launchStatuses(limit: Int, offset: Int): LaunchStatusesResult
+  launchStatus(id: Int!): LaunchStatus
+  launcherStatuses(limit: Int, offset: Int): LauncherStatusesResult
+  launcherStatus(id: Int!): LauncherStatus
+  missionTypes(limit: Int, offset: Int): MissionTypesResult
+  missionType(id: Int!): MissionType
+  netPrecisions(limit: Int, offset: Int): NetPrecisionsResult
+  netPrecision(id: Int!): NetPrecision
+  noticeTypes(limit: Int, offset: Int): NoticeTypesResult
+  noticeType(id: Int!): NoticeType
+  orbits(limit: Int, offset: Int): OrbitsResult
+  orbit(id: Int!): Orbit
+  payloadTypes(limit: Int, offset: Int): PayloadTypesResult
+  payloadType(id: Int!): PayloadType
+  programTypes(limit: Int, offset: Int): ProgramTypesResult
+  programType(id: Int!): ProgramType
+  roadClosureStatuses(limit: Int, offset: Int): RoadClosureStatusesResult
+  roadClosureStatus(id: Int!): RoadClosureStatus
+  spaceStationStatuses(limit: Int, offset: Int): SpaceStationStatusesResult
+  spaceStationStatus(id: Int!): SpaceStationStatus
+  spacecraftConfigurationTypes(
+    limit: Int
+    offset: Int
+  ): SpacecraftConfigurationTypesResult
+  spacecraftConfigurationType(id: Int!): SpacecraftConfigurationType
+  spacecraftStatuses(limit: Int, offset: Int): SpacecraftStatusesResult
+  spacecraftStatus(id: Int!): SpacecraftStatus
+  timelineEventTypes(limit: Int, offset: Int): TimelineEventTypesResult
+  timelineEventType(id: Int!): TimelineEventType
+  vidUrlTypes(limit: Int, offset: Int): VidURLTypesResult
+  vidUrlType(id: Int!): ConfigVidURLType
+  events(
+    limit: Int
+    offset: Int
+    search: String
+    ordering: String
+    typeId: Int
+    programId: Int
+  ): EventsResult
+  event(id: Int!): Event
+  eventsUpcoming(
+    limit: Int
+    offset: Int
+    search: String
+    ordering: String
+    typeId: Int
+    programId: Int
+  ): EventsResult
+  eventUpcoming(id: Int!): Event
+  eventsPrevious(
+    limit: Int
+    offset: Int
+    search: String
+    ordering: String
+    typeId: Int
+    programId: Int
+  ): EventsResult
+  eventPrevious(id: Int!): Event
+  launchers(
+    limit: Int
+    offset: Int
+    search: String
+    ordering: String
+    serialNumber: String
+    statusId: Int
+    launcherConfigId: Int
+    flightProven: Boolean
+  ): LaunchersResult
+  launcher(id: Int!): Launcher
+  launcherConfigurations(
+    limit: Int
+    offset: Int
+    search: String
+    ordering: String
+    name: String
+    manufacturerId: Int
+    active: Boolean
+    reusable: Boolean
+    familyId: Int
+  ): LauncherConfigurationsResult
+  launcherConfiguration(id: Int!): LauncherConfiguration
+  launcherConfigurationFamilies(
+    limit: Int
+    offset: Int
+    search: String
+    ordering: String
+  ): LauncherConfigurationFamiliesResult
+  launcherConfigurationFamily(id: Int!): LauncherConfigurationFamily
+  launches(
+    limit: Int
+    offset: Int
+    search: String
+    ordering: String
+    statusId: Int
+    launchServiceProviderId: Int
+    rocketConfigurationId: Int
+    locationId: Int
+    padId: Int
+    netGt: String
+    netLt: String
+    netGte: String
+    netLte: String
+  ): LaunchesResult
+  launch(id: ID!): Launch
+  launchesUpcoming(
+    limit: Int
+    offset: Int
+    search: String
+    ordering: String
+    statusId: Int
+    launchServiceProviderId: Int
+    rocketConfigurationId: Int
+    locationId: Int
+    padId: Int
+    hideRecentPrevious: Boolean
+  ): LaunchesResult
+  launchUpcoming(id: ID!): Launch
+  launchesPrevious(
+    limit: Int
+    offset: Int
+    search: String
+    ordering: String
+    statusId: Int
+    launchServiceProviderId: Int
+    rocketConfigurationId: Int
+    locationId: Int
+    padId: Int
+  ): LaunchesResult
+  launchPrevious(id: ID!): Launch
+  locations(
+    limit: Int
+    offset: Int
+    search: String
+    ordering: String
+    name: String
+    countryCode: String
+  ): LocationsResult
+  location(id: Int!): Location
+  pads(
+    limit: Int
+    offset: Int
+    search: String
+    ordering: String
+    name: String
+    locationId: Int
+  ): PadsResult
+  pad(id: Int!): Pad
+  celestialBodies(
+    limit: Int
+    offset: Int
+    search: String
+    ordering: String
+    name: String
+  ): CelestialBodiesResult
+  celestialBody(id: Int!): CelestialBody
+  landings(
+    limit: Int
+    offset: Int
+    ordering: String
+    attempt: Boolean
+    success: Boolean
+    launcherId: Int
+    launcherConfigurationId: Int
+  ): LandingsResult
+  landingById(id: Int!): Landing
+  payloads(
+    limit: Int
+    offset: Int
+    search: String
+    ordering: String
+    name: String
+  ): PayloadsResult
+  payload(id: Int!): Payload
+  payloadFlights(
+    limit: Int
+    offset: Int
+    ordering: String
+  ): PayloadFlightsResult
+  payloadFlight(id: Int!): PayloadFlight
+  missionPatches(
+    limit: Int
+    offset: Int
+    search: String
+    ordering: String
+    name: String
+    agencyId: Int
+  ): MissionPatchesResult
+  missionPatch(id: Int!): MissionPatchEntity
+  programs(
+    limit: Int
+    offset: Int
+    search: String
+    ordering: String
+  ): ProgramsResult
+  program(id: Int!): Program
+  updates(limit: Int, offset: Int, ordering: String): UpdatesResult
+  update(id: Int!): UpdateEntity
+  spaceStations(
+    limit: Int
+    offset: Int
+    search: String
+    ordering: String
+    name: String
+    statusId: Int
+  ): SpaceStationsResult
+  spaceStation(id: Int!): SpaceStation
+  expeditions(
+    limit: Int
+    offset: Int
+    search: String
+    ordering: String
+    name: String
+    spacestationId: Int
+    crewId: Int
+  ): ExpeditionsResult
+  expedition(id: Int!): Expedition
+  dockingEvents(
+    limit: Int
+    offset: Int
+    ordering: String
+    spacestationId: Int
+    flightVehicleId: Int
+  ): DockingEventsResult
+  dockingEvent(id: Int!): DockingEvent
+  spacewalks(
+    limit: Int
+    offset: Int
+    search: String
+    ordering: String
+    name: String
+    crewId: Int
+    expeditionId: Int
+  ): SpacewalksResult
+  spacewalk(id: Int!): Spacewalk
+  spacecraft(
+    limit: Int
+    offset: Int
+    search: String
+    ordering: String
+    name: String
+    statusId: Int
+    spacecraftConfigId: Int
+  ): SpacecraftResult
+  spacecraftById(id: Int!): Spacecraft
+  spacecraftConfigurations(
+    limit: Int
+    offset: Int
+    search: String
+    ordering: String
+    name: String
+    manufacturerId: Int
+    inUse: Boolean
+    humanRated: Boolean
+  ): SpacecraftConfigurationsResult
+  spacecraftConfiguration(id: Int!): SpacecraftConfiguration
+  spacecraftConfigurationFamilies(
+    limit: Int
+    offset: Int
+    search: String
+    ordering: String
+  ): SpacecraftConfigurationFamiliesResult
+  spacecraftConfigurationFamily(id: Int!): SpacecraftConfigurationFamily
+  spacecraftFlights(
+    limit: Int
+    offset: Int
+    ordering: String
+  ): SpacecraftFlightsResult
+  spacecraftFlight(id: Int!): SpacecraftFlight
+  apiThrottle: ApiThrottle
+  starshipDashboard: StarshipDashboard
+}
+type RoadClosureStatus {
+  id: Int!
+  name: String
+}
+type RoadClosureStatusesResult {
+  pagination: ConfigPaginationInfo!
+  results: [RoadClosureStatus!]!
+}
+type Spacecraft {
+  id: Int!
+  url: String
+  name: String!
+  serialNumber: String
+  isPlaceholder: Boolean
+  inSpace: Boolean
+  timesInSpace: Int
+  timeInSpace: String
+  timeDocked: String
+  status: SpacecraftStatusRef
+  description: String
+  spacecraftConfig: SpacecraftConfigRef
+  image: SpacecraftImage
+}
+type SpacecraftAgency {
+  id: Int!
+  url: String
+  name: String
+  abbrev: String
+  type: SpacecraftAgencyType
+}
+type SpacecraftAgencyType {
+  id: Int!
+  name: String
+}
+type SpacecraftConfigImage {
+  id: Int!
+  name: String
+  imageUrl: String
+  thumbnailUrl: String
+}
+type SpacecraftConfigRef {
+  id: Int!
+  url: String
+  name: String
+  type: SpacecraftConfigTypeRef
+  agency: SpacecraftAgency
+  inUse: Boolean
+  capability: String
+  history: String
+  details: String
+  maidenFlight: String
+  height: Float
+  diameter: Float
+  humanRated: Boolean
+  crewCapacity: Int
+  payloadCapacity: Int
+  flightLife: String
+  image: SpacecraftConfigImage
+  wikiLink: String
+  infoLink: String
+}
+type SpacecraftConfigTypeRef {
+  id: Int!
+  name: String
+}
+type SpacecraftConfiguration {
+  id: Int!
+  url: String
+  name: String!
+  type: SpacecraftConfigTypeRef
+  agency: SpacecraftAgency
+  inUse: Boolean
+  capability: String
+  history: String
+  details: String
+  maidenFlight: String
+  height: Float
+  diameter: Float
+  humanRated: Boolean
+  crewCapacity: Int
+  payloadCapacity: Int
+  flightLife: String
+  image: SpacecraftConfigImage
+  wikiLink: String
+  infoLink: String
+}
+type SpacecraftConfigurationFamiliesResult {
+  pagination: SpacecraftPaginationInfo!
+  results: [SpacecraftConfigurationFamily!]!
+}
+type SpacecraftConfigurationFamily {
+  id: Int!
+  url: String
+  name: String!
+}
+type SpacecraftConfigurationsResult {
+  pagination: SpacecraftPaginationInfo!
+  results: [SpacecraftConfiguration!]!
+}
+type SpacecraftConfigurationType {
+  id: Int!
+  name: String
+}
+type SpacecraftConfigurationTypesResult {
+  pagination: ConfigPaginationInfo!
+  results: [SpacecraftConfigurationType!]!
+}
+type SpacecraftFlight {
+  id: Int!
+  url: String
+  missionEnd: String
+  destinationName: String
+  spacecraft: SpacecraftFlightSpacecraft
+  launch: SpacecraftFlightLaunch
+}
+type SpacecraftFlightLaunch {
+  id: ID!
+  url: String
+  name: String
+  slug: String
+  status: SpacecraftFlightLaunchStatus
+  net: String
+  launchServiceProvider: SpacecraftFlightLaunchProvider
+}
+type SpacecraftFlightLaunchProvider {
+  id: Int!
+  url: String
+  name: String
+  abbrev: String
+}
+type SpacecraftFlightLaunchStatus {
+  id: Int!
+  name: String
+  abbrev: String
+}
+type SpacecraftFlightSpacecraft {
+  id: Int!
+  url: String
+  name: String
+  serialNumber: String
+  status: SpacecraftStatusRef
+  description: String
+}
+type SpacecraftFlightsResult {
+  pagination: SpacecraftPaginationInfo!
+  results: [SpacecraftFlight!]!
+}
+type SpacecraftImage {
+  id: Int!
+  name: String
+  imageUrl: String
+  thumbnailUrl: String
+  credit: String
+}
+type SpacecraftPaginationInfo {
+  count: Int!
+  next: String
+  previous: String
+}
+type SpacecraftResult {
+  pagination: SpacecraftPaginationInfo!
+  results: [Spacecraft!]!
+}
+type SpacecraftStatus {
+  id: Int!
+  name: String
+}
+type SpacecraftStatusesResult {
+  pagination: ConfigPaginationInfo!
+  results: [SpacecraftStatus!]!
+}
+type SpacecraftStatusRef {
+  id: Int!
+  name: String
+}
+type SpaceStation {
+  id: Int!
+  url: String
+  name: String!
+  status: SpaceStationStatusRef
+  type: SpaceStationTypeRef
+  founded: String
+  deorbited: String
+  description: String
+  orbit: String
+  image: SpaceStationImage
+  owners: [SpaceStationOwner]
+}
+type SpaceStationImage {
+  id: Int!
+  name: String
+  imageUrl: String
+  thumbnailUrl: String
+  credit: String
+}
+type SpaceStationOwner {
+  id: Int!
+  url: String
+  name: String
+  abbrev: String
+  type: SpaceStationOwnerType
+}
+type SpaceStationOwnerType {
+  id: Int!
+  name: String
+}
+type SpaceStationsPaginationInfo {
+  count: Int!
+  next: String
+  previous: String
+}
+type SpaceStationsResult {
+  pagination: SpaceStationsPaginationInfo!
+  results: [SpaceStation!]!
+}
+type SpaceStationStatus {
+  id: Int!
+  name: String
+}
+type SpaceStationStatusesResult {
+  pagination: ConfigPaginationInfo!
+  results: [SpaceStationStatus!]!
+}
+type SpaceStationStatusRef {
+  id: Int!
+  name: String
+}
+type SpaceStationTypeRef {
+  id: Int!
+  name: String
+}
+type Spacewalk {
+  id: Int!
+  url: String
+  name: String
+  start: String
+  end: String
+  duration: String
+  location: String
+  crew: [SpacewalkCrewMember]
+}
+type SpacewalkAstronaut {
+  id: Int!
+  url: String
+  name: String
+  status: SpacewalkAstronautStatus
+  type: SpacewalkAstronautType
+  agency: SpacewalkAstronautAgency
+  image: SpacewalkAstronautImage
+}
+type SpacewalkAstronautAgency {
+  id: Int!
+  url: String
+  name: String
+  abbrev: String
+}
+type SpacewalkAstronautImage {
+  id: Int!
+  name: String
+  imageUrl: String
+  thumbnailUrl: String
+}
+type SpacewalkAstronautStatus {
+  id: Int!
+  name: String
+}
+type SpacewalkAstronautType {
+  id: Int!
+  name: String
+}
+type SpacewalkCrewMember {
+  id: Int!
+  role: SpacewalkCrewRole
+  astronaut: SpacewalkAstronaut
+}
+type SpacewalkCrewRole {
+  id: Int!
+  role: String
+  priority: Int
+}
+type SpacewalksResult {
+  pagination: SpaceStationsPaginationInfo!
+  results: [Spacewalk!]!
+}
+type StarshipDashboard {
+  launches: StarshipLaunchInfo
+  events: StarshipEventInfo
+  vehicles: StarshipVehicleInfo
+  updates: [StarshipUpdate]
+  roadClosures: [StarshipRoadClosure]
+  notices: [StarshipNotice]
+  liveStreams: [StarshipLiveStream]
+}
+type StarshipEvent {
+  id: Int
+  url: String
+  name: String
+  slug: String
+  type: StarshipEventType
+  description: String
+  webcastLive: Boolean
+  location: String
+  date: String
+  image: StarshipImage
+}
+type StarshipEventInfo {
+  upcoming: [StarshipEvent]
+  previous: [StarshipEvent]
+}
+type StarshipEventType {
+  id: Int
+  name: String
+}
+type StarshipImage {
+  id: Int
+  name: String
+  imageUrl: String
+  thumbnailUrl: String
+}
+type StarshipLaunch {
+  id: ID
+  url: String
+  name: String
+  slug: String
+  status: StarshipLaunchStatus
+  lastUpdated: String
+  net: String
+  windowStart: String
+  windowEnd: String
+  probability: Int
+  weatherConcerns: String
+  webcastLive: Boolean
+  image: StarshipImage
+}
+type StarshipLaunchInfo {
+  upcoming: [StarshipLaunch]
+  previous: [StarshipLaunch]
+}
+type StarshipLaunchStatus {
+  id: Int
+  name: String
+  abbrev: String
+}
+type StarshipLiveStream {
+  title: String
+  description: String
+  image: String
+  url: String
+}
+type StarshipNotice {
+  id: Int
+  type: StarshipNoticeType
+  url: String
+  date: String
+}
+type StarshipNoticeType {
+  id: Int
+  name: String
+}
+type StarshipRoadClosure {
+  id: Int
+  title: String
+  status: StarshipRoadClosureStatus
+  windowStart: String
+  windowEnd: String
+}
+type StarshipRoadClosureStatus {
+  id: Int
+  name: String
+}
+type StarshipUpdate {
+  id: Int
+  profileImage: String
+  comment: String
+  infoUrl: String
+  createdBy: String
+  createdOn: String
+}
+type StarshipVehicleInfo {
+  launchers: [StarshipVehicleLauncher]
+  spacecraft: [StarshipVehicleSpacecraft]
+}
+type StarshipVehicleLauncher {
+  id: Int
+  url: String
+  serialNumber: String
+  status: StarshipVehicleStatus
+  details: String
+  flights: Int
+  lastLaunchDate: String
+  firstLaunchDate: String
+}
+type StarshipVehicleSpacecraft {
+  id: Int
+  url: String
+  name: String
+  serialNumber: String
+  status: StarshipVehicleStatus
+  description: String
+}
+type StarshipVehicleStatus {
+  id: Int
+  name: String
+}
+type TimelineEventType {
+  id: Int!
+  name: String
+}
+type TimelineEventTypesResult {
+  pagination: ConfigPaginationInfo!
+  results: [TimelineEventType!]!
+}
+type UpdateEntity {
+  id: Int!
+  profileImage: String
+  comment: String
+  infoUrl: String
+  createdBy: String
+  createdOn: String
+}
+type UpdatesResult {
+  pagination: LocationsPaginationInfo!
+  results: [UpdateEntity!]!
+}
+type VidURLTypesResult {
+  pagination: ConfigPaginationInfo!
+  results: [ConfigVidURLType!]!
+}
