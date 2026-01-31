@@ -1,0 +1,48 @@
+{
+  "name": "graphql-embedding",
+  "version": "0.1.0",
+  "description": "Embedding provider using node-llama-cpp for GraphQL schema embedding",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "models"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf dist *.tsbuildinfo",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "graphql",
+    "embedding",
+    "llama",
+    "gguf",
+    "vector"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "graphql-embedding-core": "^0.1.0",
+    "node-llama-cpp": "^3.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": ""
+  }
+}

@@ -1,0 +1,242 @@
+{
+  "name": "graphql-workbench",
+  "displayName": "GraphQL Workbench",
+  "description": "Embed GraphQL schemas and generate operations from natural language",
+  "version": "0.1.0",
+  "publisher": "graphql-embedding",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other",
+    "Programming Languages"
+  ],
+  "keywords": [
+    "graphql",
+    "embedding",
+    "ai",
+    "vector",
+    "query generation",
+    "workbench"
+  ],
+  "activationEvents": [
+    "onLanguage:graphql",
+    "workspaceContains:**/*.graphql"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "graphql-workbench.embedFile",
+        "title": "GraphQL Workbench: Embed Schema from File"
+      },
+      {
+        "command": "graphql-workbench.embedEndpoint",
+        "title": "GraphQL Workbench: Embed Schema from Endpoint"
+      },
+      {
+        "command": "graphql-workbench.generateOperation",
+        "title": "GraphQL Workbench: Generate Operation"
+      },
+      {
+        "command": "graphql-workbench.clearEmbeddings",
+        "title": "GraphQL Workbench: Clear All Embeddings"
+      },
+      {
+        "command": "graphql-workbench.introspectEndpoint",
+        "title": "GraphQL Workbench: Introspect Endpoint to File"
+      },
+      {
+        "command": "graphql-workbench.lintSchema",
+        "title": "GraphQL Workbench: Lint Schema"
+      },
+      {
+        "command": "graphql-workbench.analyzeSchemaDesign",
+        "title": "GraphQL Workbench: Analyze Schema Design"
+      },
+      {
+        "command": "graphql-workbench.dismissLintViolation",
+        "title": "GraphQL Workbench: Dismiss Lint Violation"
+      },
+      {
+        "command": "graphql-workbench.dismissAllLintViolations",
+        "title": "GraphQL Workbench: Dismiss All Lint Violations"
+      }
+    ],
+    "configuration": {
+      "title": "GraphQL Workbench",
+      "properties": {
+        "graphqlWorkbench.vectorStore": {
+          "type": "string",
+          "enum": [
+            "pglite",
+            "postgres"
+          ],
+          "default": "pglite",
+          "description": "Vector store to use for embeddings"
+        },
+        "graphqlWorkbench.postgresConnectionString": {
+          "type": "string",
+          "default": "postgresql://postgres@localhost:5432/postgres",
+          "description": "PostgreSQL connection string (when using postgres vector store)"
+        },
+        "graphqlWorkbench.modelPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to custom GGUF embedding model (leave empty to use bundled model)"
+        },
+        "graphqlWorkbench.llmProvider": {
+          "type": "string",
+          "enum": [
+            "ollama",
+            "ollama-cloud",
+            "openai",
+            "anthropic"
+          ],
+          "default": "ollama",
+          "description": "LLM provider for dynamic operation generation"
+        },
+        "graphqlWorkbench.llmModel": {
+          "type": "string",
+          "default": "",
+          "description": "LLM model to use (leave empty for provider default: qwen2.5 for Ollama/Ollama Cloud, gpt-4o-mini for OpenAI, claude-3-haiku for Anthropic)"
+        },
+        "graphqlWorkbench.ollamaBaseUrl": {
+          "type": "string",
+          "default": "http://localhost:11434",
+          "description": "Ollama API base URL"
+        },
+        "graphqlWorkbench.ollamaCloudApiKey": {
+          "type": "string",
+          "default": "",
+          "description": "Ollama Cloud API key (required when using ollama-cloud provider)"
+        },
+        "graphqlWorkbench.openaiApiKey": {
+          "type": "string",
+          "default": "",
+          "description": "OpenAI API key (required when using OpenAI provider)"
+        },
+        "graphqlWorkbench.anthropicApiKey": {
+          "type": "string",
+          "default": "",
+          "description": "Anthropic API key (required when using Anthropic provider)"
+        },
+        "graphqlWorkbench.llmTemperature": {
+          "type": "number",
+          "default": 0.2,
+          "minimum": 0,
+          "maximum": 2,
+          "description": "LLM temperature for operation generation (lower = more deterministic)"
+        },
+        "graphqlWorkbench.llmTopK": {
+          "type": "number",
+          "default": 40,
+          "minimum": 1,
+          "maximum": 100,
+          "description": "Top-K sampling parameter for LLM (limits token choices to top K most likely)"
+        },
+        "graphqlWorkbench.llmTopP": {
+          "type": "number",
+          "default": 0.9,
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Top-P (nucleus) sampling parameter for LLM (cumulative probability threshold)"
+        },
+        "graphqlWorkbench.minSimilarityScore": {
+          "type": "number",
+          "default": 0.4,
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Minimum cosine similarity score for vector search results (0-1)"
+        },
+        "graphqlWorkbench.maxDocuments": {
+          "type": "number",
+          "default": 50,
+          "minimum": 1,
+          "maximum": 200,
+          "description": "Maximum number of documents to retrieve from vector search"
+        },
+        "graphqlWorkbench.maxValidationRetries": {
+          "type": "number",
+          "default": 5,
+          "minimum": 1,
+          "maximum": 10,
+          "description": "Maximum attempts to fix invalid generated operations"
+        }
+      }
+    },
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "graphql-workbench.dismissLintViolation",
+          "when": "false"
+        },
+        {
+          "command": "graphql-workbench.dismissAllLintViolations",
+          "when": "false"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "graphql-workbench.embedFile",
+          "when": "resourceExtname == .graphql",
+          "group": "graphql-workbench"
+        },
+        {
+          "command": "graphql-workbench.lintSchema",
+          "when": "resourceExtname == .graphql",
+          "group": "graphql-workbench"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "graphql-workbench.embedFile",
+          "when": "resourceExtname == .graphql",
+          "group": "graphql-workbench"
+        },
+        {
+          "command": "graphql-workbench.generateOperation",
+          "when": "resourceExtname == .graphql",
+          "group": "graphql-workbench"
+        },
+        {
+          "command": "graphql-workbench.lintSchema",
+          "when": "resourceExtname == .graphql",
+          "group": "graphql-workbench"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run build",
+    "build": "node esbuild.config.mjs",
+    "watch": "node esbuild.config.mjs --watch",
+    "clean": "rm -rf dist *.tsbuildinfo",
+    "package": "vsce package",
+    "publish": "vsce publish",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "^0.2.0",
+    "graphql": "^16.8.1",
+    "graphql-embedding": "^0.1.0",
+    "graphql-embedding-core": "^0.1.0",
+    "graphql-embedding-operation": "^0.1.0",
+    "graphql-embedding-parser": "^0.1.0",
+    "graphql-embedding-schema-design": "^0.1.0",
+    "pg": "^8.11.3"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/pg": "^8.11.0",
+    "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^3.2.1",
+    "esbuild": "^0.20.0",
+    "typescript": "^5.3.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": ""
+  },
+  "license": "MIT"
+}

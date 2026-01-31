@@ -1,0 +1,61 @@
+{
+  "name": "graphql-embedding-core",
+  "version": "0.1.0",
+  "description": "Core embedding and vector store interfaces for GraphQL schemas",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf dist *.tsbuildinfo",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "graphql",
+    "embedding",
+    "vector",
+    "pgvector",
+    "pglite"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "graphql-embedding-parser": "^0.1.0"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.2.0",
+    "@types/node": "^20.11.0",
+    "@types/pg": "^8.11.0",
+    "pg": "^8.11.3",
+    "typescript": "^5.3.3"
+  },
+  "peerDependencies": {
+    "@electric-sql/pglite": "^0.2.0",
+    "pg": "^8.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@electric-sql/pglite": {
+      "optional": true
+    },
+    "pg": {
+      "optional": true
+    }
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": ""
+  }
+}

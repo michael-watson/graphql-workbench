@@ -1,47 +1,32 @@
 {
-  "name": "graphql-workbench",
-  "displayName": "graphql-workbench",
-  "description": "An extension dedicated to helping you design work with GraphQL schemas",
-  "version": "0.0.1",
-  "engines": {
-    "vscode": "^1.89.0"
-  },
-  "categories": [
-    "Other"
+  "name": "graphql-embedding-monorepo",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Monorepo for GraphQL embedding packages",
+  "workspaces": [
+    "packages/*"
   ],
-  "activationEvents": [],
-  "main": "./dist/extension.js",
-  "contributes": {
-    "commands": [
-      {
-        "command": "graphql-workbench.helloWorld",
-        "title": "Hello World"
-      }
-    ]
-  },
   "scripts": {
-    "vscode:prepublish": "npm run package",
-    "compile": "webpack",
-    "watch": "webpack --watch",
-    "package": "webpack --mode production --devtool hidden-source-map",
-    "compile-tests": "tsc -p . --outDir out",
-    "watch-tests": "tsc -p . -w --outDir out",
-    "pretest": "npm run compile-tests && npm run compile && npm run lint",
-    "lint": "eslint src --ext ts",
-    "test": "vscode-test"
+    "build": "tsc --build",
+    "clean": "tsc --build --clean && npm run clean --workspaces",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "lint": "npm run lint --workspaces --if-present",
+    "typecheck": "tsc --build --noEmit",
+    "changeset": "changeset",
+    "version": "changeset version",
+    "release": "npm run build && changeset publish",
+    "download:model": "mkdir -p packages/graphql-embedding/models && curl -L -o packages/graphql-embedding/models/embeddinggemma-300M-Q8_0.gguf https://huggingface.co/unsloth/embeddinggemma-300m-GGUF/resolve/main/embeddinggemma-300M-Q8_0.gguf"
   },
   "devDependencies": {
-    "@types/vscode": "^1.89.0",
-    "@types/mocha": "^10.0.6",
-    "@types/node": "18.x",
-    "@typescript-eslint/eslint-plugin": "^7.7.1",
-    "@typescript-eslint/parser": "^7.7.1",
-    "eslint": "^8.57.0",
-    "typescript": "^5.4.5",
-    "ts-loader": "^9.5.1",
-    "webpack": "^5.91.0",
-    "webpack-cli": "^5.1.4",
-    "@vscode/test-cli": "^0.0.9",
-    "@vscode/test-electron": "^2.3.9"
+    "@changesets/cli": "^2.29.8",
+    "@types/node": "^20.11.0",
+    "@vitest/coverage-v8": "^3.0.4",
+    "typescript": "^5.3.3",
+    "vitest": "^3.0.4"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }
