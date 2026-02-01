@@ -1,5 +1,12 @@
 import * as vscode from "vscode";
 import * as path from "path";
+import * as fs from "fs";
+import * as https from "https";
+import * as http from "http";
+
+const MODEL_FILENAME = "embeddinggemma-300M-Q8_0.gguf";
+const MODEL_DOWNLOAD_URL =
+  "https://huggingface.co/unsloth/embeddinggemma-300m-GGUF/resolve/main/embeddinggemma-300M-Q8_0.gguf";
 
 // Type-only imports (these don't generate require() calls)
 import type { Pool } from "pg";
@@ -204,6 +211,179 @@ export class EmbeddingManager {
     };
   }
 
+  private async ensureModelAvailable(): Promise<string> {
+    const config = this.getConfig();
+
+    // 1. User-configured path takes priority
+    if (config.modelPath) {
+      if (!fs.existsSync(config.modelPath)) {
+        throw new Error(
+          `Custom model path does not exist: ${config.modelPath}`
+        );
+      }
+      this.log(`Using custom model path: ${config.modelPath}`);
+      return config.modelPath;
+    }
+
+    // 2. Check for cached model in global storage
+    const modelsDir = path.join(
+      this.context.globalStorageUri.fsPath,
+      "models"
+    );
+    const cachedModelPath = path.join(modelsDir, MODEL_FILENAME);
+
+    if (fs.existsSync(cachedModelPath)) {
+      this.log(`Using cached model: ${cachedModelPath}`);
+      return cachedModelPath;
+    }
+
+    // 3. Download from Hugging Face
+    this.log(`Model not found locally, downloading from Hugging Face...`);
+    await vscode.workspace.fs.createDirectory(
+      vscode.Uri.file(modelsDir)
+    );
+    await this.downloadModel(cachedModelPath);
+    return cachedModelPath;
+  }
+
+  private async downloadModel(destPath: string): Promise<void> {
+    const partialPath = destPath + ".partial";
+
+    await vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: "Downloading embedding model",
+        cancellable: true,
+      },
+      async (progress, token) => {
+        return new Promise<void>((resolve, reject) => {
+          const cleanup = () => {
+            try {
+              if (fs.existsSync(partialPath)) {
+                fs.unlinkSync(partialPath);
+              }
+            } catch {
+              // ignore cleanup errors
+            }
+          };
+
+          const doRequest = (url: string, redirectCount: number) => {
+            if (redirectCount > 5) {
+              cleanup();
+              reject(new Error("Too many redirects while downloading model"));
+              return;
+            }
+
+            const parsedUrl = new URL(url);
+            const transport = parsedUrl.protocol === "https:" ? https : http;
+
+            const req = transport.get(url, (res) => {
+              // Follow redirects
+              if (
+                res.statusCode &&
+                res.statusCode >= 300 &&
+                res.statusCode < 400 &&
+                res.headers.location
+              ) {
+                res.resume();
+                doRequest(res.headers.location, redirectCount + 1);
+                return;
+              }
+
+              if (res.statusCode && res.statusCode !== 200) {
+                cleanup();
+                reject(
+                  new Error(
+                    `Download failed with HTTP ${res.statusCode}. You can manually download the model from ${MODEL_DOWNLOAD_URL} and set graphqlWorkbench.modelPath.`
+                  )
+                );
+                return;
+              }
+
+              const totalBytes = res.headers["content-length"]
+                ? parseInt(res.headers["content-length"], 10)
+                : undefined;
+              let downloadedBytes = 0;
+              let lastReportedPct = -1;
+
+              const fileStream = fs.createWriteStream(partialPath);
+
+              token.onCancellationRequested(() => {
+                req.destroy();
+                fileStream.close();
+                cleanup();
+                reject(new Error("Download cancelled"));
+              });
+
+              res.on("data", (chunk: Buffer) => {
+                downloadedBytes += chunk.length;
+                const downloadedMB = (downloadedBytes / (1024 * 1024)).toFixed(1);
+
+                if (totalBytes) {
+                  const totalMB = (totalBytes / (1024 * 1024)).toFixed(1);
+                  const pct = Math.floor(
+                    (downloadedBytes / totalBytes) * 100
+                  );
+                  if (pct !== lastReportedPct) {
+                    const increment = lastReportedPct < 0 ? pct : pct - lastReportedPct;
+                    lastReportedPct = pct;
+                    progress.report({
+                      message: `${downloadedMB} MB / ${totalMB} MB (${pct}%)`,
+                      increment,
+                    });
+                  }
+                } else {
+                  progress.report({
+                    message: `${downloadedMB} MB downloaded`,
+                  });
+                }
+              });
+
+              res.pipe(fileStream);
+
+              fileStream.on("finish", () => {
+                fileStream.close(() => {
+                  try {
+                    fs.renameSync(partialPath, destPath);
+                    this.log(`Model downloaded to: ${destPath}`);
+                    resolve();
+                  } catch (err) {
+                    cleanup();
+                    reject(
+                      new Error(
+                        `Failed to save model file: ${err instanceof Error ? err.message : String(err)}`
+                      )
+                    );
+                  }
+                });
+              });
+
+              fileStream.on("error", (err) => {
+                cleanup();
+                reject(
+                  new Error(
+                    `Failed to write model file: ${err.message}. You can manually download from ${MODEL_DOWNLOAD_URL} and set graphqlWorkbench.modelPath.`
+                  )
+                );
+              });
+            });
+
+            req.on("error", (err) => {
+              cleanup();
+              reject(
+                new Error(
+                  `Download failed: ${err.message}. You can manually download the model from ${MODEL_DOWNLOAD_URL} and set graphqlWorkbench.modelPath.`
+                )
+              );
+            });
+          };
+
+          doRequest(MODEL_DOWNLOAD_URL, 0);
+        });
+      }
+    );
+  }
+
   getStoreInfo(): StoreInfo | undefined {
     return this.storeInfo;
   }
@@ -241,11 +421,21 @@ export class EmbeddingManager {
         progress.report({ message: "Loading embedding model..." });
         this.log("Loading embedding model...");
 
+        // Resolve model path: user-configured > cached > download
+        let resolvedModelPath: string;
+        try {
+          resolvedModelPath = await this.ensureModelAvailable();
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          throw new Error(
+            `Failed to obtain embedding model: ${message}. You can manually download the model from ${MODEL_DOWNLOAD_URL} and set the graphqlWorkbench.modelPath setting.`
+          );
+        }
+
         // Initialize embedding provider
         const { LlamaEmbeddingProvider } = await loadLlamaProvider();
-        const modelPath = config.modelPath || undefined;
         const provider = new LlamaEmbeddingProvider({
-          modelPath,
+          modelPath: resolvedModelPath,
         });
         await provider.initialize();
         this.embeddingProvider = provider;

@@ -6,3 +6,4 @@ src/**
 *.config.mjs
 .gitignore
 tsconfig.json
+scripts/**

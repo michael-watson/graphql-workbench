@@ -16,21 +16,12 @@ const buildOptions = {
     // Native modules that can't be bundled
     "node-llama-cpp",
     "@node-llama-cpp/*",
-    // PGLite native bindings
+    // PGLite uses WASM binaries loaded at runtime
     "@electric-sql/pglite",
     "@electric-sql/pglite/*",
-    // PostgreSQL native bindings
-    "pg",
+    // Optional native PostgreSQL bindings
     "pg-native",
     "pg-cloudflare",
-    // Keep graphql external to avoid version conflicts
-    "graphql",
-    // Local workspace packages - must be external to support ESM
-    "graphql-embedding",
-    "graphql-embedding-core",
-    "graphql-embedding-parser",
-    "graphql-embedding-operation",
-    "graphql-embedding-schema-design",
   ],
   logLevel: "info",
 };

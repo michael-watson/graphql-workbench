@@ -4,10 +4,11 @@ Embed GraphQL schemas and generate operations from natural language queries dire
 
 ## Features
 
-- **Embed Schema from File**: Parse and embed a `.graphql` schema file
-- **Embed Schema from Endpoint**: Introspect a GraphQL endpoint and embed its schema
-- **Generate Operation**: Create GraphQL queries/mutations from natural language descriptions
-- **Clear Embeddings**: Remove all stored embeddings
+- **Schema Embedding** -- Parse and embed `.graphql` schemas from local files or live endpoints into a vector store
+- **Operation Generation** -- Generate GraphQL queries, mutations, and subscriptions from natural language using an LLM
+- **Schema Linting** -- Check schemas against naming convention and design rules with quick-fix dismissals
+- **Schema Design Analysis** -- LLM-powered analysis of your schema against best practice categories
+- **Endpoint Introspection** -- Download and save remote GraphQL schemas as `.graphql` files
 
 ## Commands
 
@@ -15,32 +16,152 @@ Open the Command Palette (`Cmd+Shift+P` / `Ctrl+Shift+P`) and search for:
 
 | Command | Description |
 |---------|-------------|
-| `GraphQL Workbench: Embed Schema from File` | Embed a local `.graphql` file |
-| `GraphQL Workbench: Embed Schema from Endpoint` | Introspect and embed from a GraphQL endpoint |
-| `GraphQL Workbench: Generate Operation` | Generate a GraphQL operation from natural language |
-| `GraphQL Workbench: Clear All Embeddings` | Clear all stored embeddings |
+| `GraphQL Workbench: Embed Schema from File` | Parse and embed a local `.graphql` schema |
+| `GraphQL Workbench: Embed Schema from Endpoint` | Introspect a GraphQL endpoint and embed its schema |
+| `GraphQL Workbench: Generate Operation` | Generate a GraphQL operation from a natural language description |
+| `GraphQL Workbench: Introspect Endpoint to File` | Download a remote schema via introspection and save it as a `.graphql` file |
+| `GraphQL Workbench: Lint Schema` | Check a schema against naming convention and design rules |
+| `GraphQL Workbench: Analyze Schema Design` | Generate an LLM-powered best practices report for the embedded schema |
+| `GraphQL Workbench: Clear All Embeddings` | Remove all stored embeddings from the vector store |
 
-## Context Menu
+## Context Menus
 
 Right-click on a `.graphql` file in the Explorer or Editor to access:
-- Embed Schema from File
-- Generate Operation
+
+- **Embed Schema from File**
+- **Generate Operation** (editor only)
+- **Lint Schema**
 
 ## Settings
 
-Configure the extension in VS Code Settings (`Cmd+,` / `Ctrl+,`):
+Configure the extension in VS Code Settings (`Cmd+,` / `Ctrl+,`). All settings are under the `graphqlWorkbench` namespace.
+
+### Vector Store
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `graphqlWorkbench.vectorStore` | `pglite` | Vector store type: `pglite` (local) or `postgres` |
-| `graphqlWorkbench.postgresConnectionString` | `postgresql://postgres@localhost:5432/postgres` | PostgreSQL connection string |
-| `graphqlWorkbench.modelPath` | `` | Path to custom GGUF embedding model |
+| `graphqlWorkbench.vectorStore` | `"pglite"` | Vector store backend: `"pglite"` (embedded, no setup) or `"postgres"` (requires pgvector) |
+| `graphqlWorkbench.postgresConnectionString` | `"postgresql://postgres@localhost:5432/postgres"` | PostgreSQL connection string (only used when `vectorStore` is `"postgres"`) |
 
-### Using PGLite (Default)
+### Embedding Model
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `graphqlWorkbench.modelPath` | `""` | Path to a custom GGUF embedding model. Leave empty to auto-download the default model (~313 MB) on first use. The model is cached in the extension's global storage. |
+
+### LLM Provider
+
+These settings control the LLM used for operation generation and schema design analysis.
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `graphqlWorkbench.llmProvider` | `"ollama"` | LLM provider: `"ollama"`, `"ollama-cloud"`, `"openai"`, or `"anthropic"` |
+| `graphqlWorkbench.llmModel` | `""` | Model name. When empty, uses the provider default: `qwen2.5` for Ollama, `gpt-4o-mini` for OpenAI, `claude-3-haiku` for Anthropic. |
+| `graphqlWorkbench.ollamaBaseUrl` | `"http://localhost:11434"` | Ollama API base URL |
+| `graphqlWorkbench.ollamaCloudApiKey` | `""` | Ollama Cloud API key (required for `ollama-cloud` provider) |
+| `graphqlWorkbench.openaiApiKey` | `""` | OpenAI API key (required for `openai` provider) |
+| `graphqlWorkbench.anthropicApiKey` | `""` | Anthropic API key (required for `anthropic` provider) |
+
+### LLM Sampling
+
+| Setting | Default | Range | Description |
+|---------|---------|-------|-------------|
+| `graphqlWorkbench.llmTemperature` | `0.2` | 0--2 | Controls randomness. Lower values produce more deterministic output. |
+| `graphqlWorkbench.llmTopK` | `40` | 1--100 | Limits token selection to the top K most likely tokens at each step. |
+| `graphqlWorkbench.llmTopP` | `0.9` | 0--1 | Nucleus sampling threshold. The model considers tokens whose cumulative probability reaches this value. |
+
+### Operation Generation
+
+| Setting | Default | Range | Description |
+|---------|---------|-------|-------------|
+| `graphqlWorkbench.minSimilarityScore` | `0.4` | 0--1 | Minimum cosine similarity score for vector search results. Lower values return more results but may include less relevant matches. |
+| `graphqlWorkbench.maxDocuments` | `50` | 1--200 | Maximum number of documents to retrieve from vector search. |
+| `graphqlWorkbench.maxValidationRetries` | `5` | 1--10 | Maximum attempts the LLM gets to fix an invalid generated operation. |
+
+## Usage
+
+### 1. Embed a Schema
+
+**From a file:**
+
+1. Open a `.graphql` schema file
+2. Run `GraphQL Workbench: Embed Schema from File`
+3. Enter a table name for storing embeddings (default: `graphql_embeddings`)
+4. Wait for the embedding process to complete
+
+**From an endpoint:**
+
+1. Run `GraphQL Workbench: Embed Schema from Endpoint`
+2. Enter the GraphQL endpoint URL
+3. Optionally add authorization headers as JSON (e.g., `{"Authorization": "Bearer token"}`)
+4. Enter a table name and wait for introspection and embedding to complete
+
+### 2. Generate Operations
+
+1. Run `GraphQL Workbench: Generate Operation`
+2. Enter a natural language description of what you want:
+   - "get all users with their posts"
+   - "create a new product with name and price"
+   - "fetch order by id with line items"
+3. The generated operation opens in a new editor tab with example variables as comments
+
+### 3. Lint a Schema
+
+1. Open a `.graphql` file and run `GraphQL Workbench: Lint Schema`
+2. Deselect any rules you want to skip from the picker
+3. Violations appear in the **Problems** panel as warnings
+4. Use the lightbulb quick-fix to dismiss individual violations or all violations in a file
+
+See `docs/lint-rules.md` in the extension directory for the full list of rules.
+
+### 4. Analyze Schema Design
+
+1. Embed a schema first (step 1 above)
+2. Run `GraphQL Workbench: Analyze Schema Design`
+3. A markdown report opens evaluating naming conventions, documentation, anti-patterns, query design, and mutation design
+4. Use **Markdown: Open Preview** to render the report
+
+### 5. Introspect an Endpoint
+
+1. Run `GraphQL Workbench: Introspect Endpoint to File`
+2. Enter the endpoint URL and optional auth headers
+3. Choose a save location for the `.graphql` file
+
+## LLM Provider Setup
+
+### Ollama (default)
+
+1. Install [Ollama](https://ollama.com)
+2. Pull the default model: `ollama pull qwen2.5`
+3. Ensure Ollama is running on the default port (11434), or update `graphqlWorkbench.ollamaBaseUrl`
+
+No API key is needed.
+
+### Ollama Cloud
+
+1. Set `graphqlWorkbench.llmProvider` to `"ollama-cloud"`
+2. Set `graphqlWorkbench.ollamaCloudApiKey` to your API key
+3. Optionally set `graphqlWorkbench.llmModel` (defaults to `qwen2.5`)
+
+### OpenAI
+
+1. Set `graphqlWorkbench.llmProvider` to `"openai"`
+2. Set `graphqlWorkbench.openaiApiKey` to your API key
+3. Optionally set `graphqlWorkbench.llmModel` (defaults to `gpt-4o-mini`)
+
+### Anthropic
+
+1. Set `graphqlWorkbench.llmProvider` to `"anthropic"`
+2. Set `graphqlWorkbench.anthropicApiKey` to your API key
+3. Optionally set `graphqlWorkbench.llmModel` (defaults to `claude-3-haiku`)
+
+## Vector Store Setup
+
+### PGLite (default)
 
 PGLite stores embeddings locally with no external dependencies. Data persists in VS Code's extension storage.
 
-### Using PostgreSQL
+### PostgreSQL
 
 1. Install PostgreSQL with the pgvector extension
 2. Create a database:
@@ -57,38 +178,15 @@ PGLite stores embeddings locally with no external dependencies. Data persists in
    }
    ```
 
-## Usage
-
-### 1. Embed a Schema
-
-**From a file:**
-1. Open a `.graphql` schema file
-2. Run `GraphQL Workbench: Embed Schema from File`
-3. Wait for the embedding process to complete
-
-**From an endpoint:**
-1. Run `GraphQL Workbench: Embed Schema from Endpoint`
-2. Enter the GraphQL endpoint URL
-3. Optionally add authorization headers as JSON
-4. Wait for introspection and embedding to complete
-
-### 2. Generate Operations
-
-1. Run `GraphQL Workbench: Generate Operation`
-2. Enter a natural language description of what you want:
-   - "get all users with their posts"
-   - "create a new product with name and price"
-   - "fetch order by id with line items"
-3. The generated operation opens in a new editor tab
-
 ## Requirements
 
 - VS Code 1.85.0 or later
-- For PostgreSQL: PostgreSQL server with pgvector extension
+- An LLM provider for operation generation and schema design analysis (Ollama runs locally with no API key)
+- For PostgreSQL vector store: a PostgreSQL server with the pgvector extension
 
 ## Notes
 
-- The first command execution initializes the embedding model (may take a moment)
+- The embedding model (~313 MB) is downloaded automatically on first use and cached locally
 - Embeddings persist between VS Code sessions
-- Each workspace can have its own set of embeddings
-- The bundled embedding model is optimized for code-related queries
+- Each table name provides an isolated set of embeddings, allowing multiple schemas side by side
+- The Output panel (`GraphQL Workbench`) shows detailed logs for all operations

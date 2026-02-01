@@ -35,3 +35,6 @@ coverage/
 
 # GGUF model files (too large for GitHub)
 *.gguf
+
+# Extensions
+*.vsix
