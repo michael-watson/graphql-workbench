@@ -199,6 +199,16 @@ try {
       continue;
     }
 
+    // Skip ALL @node-llama-cpp/* platform binary packages.
+    // These are platform-specific native binaries (including large CUDA/Vulkan
+    // variants). Since the VSIX is universal (not platform-specific), bundling
+    // any single platform's binaries is wrong. node-llama-cpp will download
+    // the correct binary for the user's platform at runtime.
+    if (pkgName.startsWith("@node-llama-cpp/")) {
+      skippedCount++;
+      continue;
+    }
+
     // Skip workspace package symlinks (they are bundled by esbuild)
     const srcInRoot = join(rootNodeModules, topLevelPkg);
     try {
@@ -252,6 +262,15 @@ try {
     console.log("Pruned node-llama-cpp/templates/.");
   }
 
+  // 3. node-llama-cpp/bins: prebuilt binaries downloaded by postinstall.
+  //    On CI these can be very large (CUDA variants). The extension lets
+  //    node-llama-cpp download the correct binary at runtime instead.
+  const llamaBinsDir = join(stagingNodeModules, "node-llama-cpp", "bins");
+  if (existsSync(llamaBinsDir)) {
+    rmSync(llamaBinsDir, { recursive: true, force: true });
+    console.log("Pruned node-llama-cpp/bins/.");
+  }
+
   // 4. @electric-sql/pglite: remove unused extension .tar.gz files (keep only vector)
   const pgliteDistDir = join(
     stagingNodeModules,
@@ -273,22 +292,29 @@ try {
     );
   }
 
-  // Patch staged node-llama-cpp/package.json to remove excluded dependencies.
-  // This prevents vsce's npm-list validation from flagging them as missing.
+  // Patch staged node-llama-cpp/package.json to remove excluded and platform
+  // dependencies. This prevents vsce's npm-list validation from flagging them
+  // as missing.
   const llamaPkgPath = join(stagingNodeModules, "node-llama-cpp", "package.json");
   if (existsSync(llamaPkgPath)) {
     const llamaPkg = JSON.parse(readFileSync(llamaPkgPath, "utf8"));
+    let removedCount = 0;
     if (llamaPkg.dependencies) {
-      let removedCount = 0;
       for (const dep of Object.keys(llamaPkg.dependencies)) {
         if (EXCLUDED_PACKAGES.has(dep)) {
           delete llamaPkg.dependencies[dep];
           removedCount++;
         }
       }
-      writeFileSync(llamaPkgPath, JSON.stringify(llamaPkg, null, 2) + "\n");
-      console.log(`Patched node-llama-cpp/package.json (removed ${removedCount} build-only deps).`);
     }
+    // Remove all optionalDependencies (@node-llama-cpp/* platform binaries).
+    // The extension is a universal VSIX; platform binaries are downloaded at runtime.
+    if (llamaPkg.optionalDependencies) {
+      removedCount += Object.keys(llamaPkg.optionalDependencies).length;
+      delete llamaPkg.optionalDependencies;
+    }
+    writeFileSync(llamaPkgPath, JSON.stringify(llamaPkg, null, 2) + "\n");
+    console.log(`Patched node-llama-cpp/package.json (removed ${removedCount} build-only/platform deps).`);
   }
 
   // Run vsce package from the staging directory
