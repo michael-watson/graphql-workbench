@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   width="128"
+   height="128"
+   viewBox="0 0 33.866666 33.866668"
+   version="1.1"
+   id="svg5"
+   inkscape:version="1.1 (c4e8f9e, 2021-05-24)"
+   sodipodi:docname="workbench-icon.svg"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview
+     id="namedview7"
+     pagecolor="#ffffff"
+     bordercolor="#666666"
+     borderopacity="1.0"
+     inkscape:pageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:document-units="px"
+     showgrid="false"
+     units="px"
+     inkscape:zoom="5.3530193"
+     inkscape:cx="68.092413"
+     inkscape:cy="63.702367"
+     inkscape:window-width="2697"
+     inkscape:window-height="1354"
+     inkscape:window-x="743"
+     inkscape:window-y="25"
+     inkscape:window-maximized="0"
+     inkscape:current-layer="layer1"
+     showguides="false" />
+  <defs
+     id="defs2" />
+  <g
+     inkscape:label="Layer 1"
+     inkscape:groupmode="layer"
+     id="layer1">
+    <g
+       style="fill:#e10098"
+       id="g854"
+       transform="matrix(0.21021725,0,0,0.21021725,6.422986,1.2176188)">
+      <path
+         fill-rule="evenodd"
+         clip-rule="evenodd"
+         d="M 50,6.90308 87.323,28.4515 V 71.5484 L 50,93.0968 12.677,71.5484 V 28.4515 Z M 16.8647,30.8693 V 62.5251 L 44.2795,15.0414 Z M 50,13.5086 18.3975,68.2457 h 63.205 z M 77.4148,72.4334 H 22.5852 L 50,88.2613 Z M 83.1353,62.5251 55.7205,15.0414 83.1353,30.8693 Z"
+         id="path826" />
+      <circle
+         cx="50"
+         cy="9.3209"
+         r="8.8199997"
+         id="circle828" />
+      <circle
+         cx="85.229202"
+         cy="29.6605"
+         r="8.8199997"
+         id="circle830" />
+      <circle
+         cx="85.229202"
+         cy="70.3396"
+         r="8.8199997"
+         id="circle832" />
+      <circle
+         cx="50"
+         cy="90.6791"
+         r="8.8199997"
+         id="circle834" />
+      <circle
+         cx="14.7659"
+         cy="70.3396"
+         r="8.8199997"
+         id="circle836" />
+      <circle
+         cx="14.7659"
+         cy="29.6605"
+         r="8.8199997"
+         id="circle838" />
+    </g>
+    <path
+       d="m 25.286499,22.23678 -0.281759,0.281758 a 0.19842189,0.19842189 0 0 1 -0.279774,0 l -2.357252,-2.353283 a 0.75598736,0.75598736 0 0 1 -0.198422,0.02977 0.79368745,0.79368745 0 0 1 -0.750034,-1.051637 l 0.503991,0.503993 0.105163,-0.105165 0.281759,-0.281759 0.105165,-0.105163 -0.503992,-0.503991 a 0.79368745,0.79368745 0 0 1 1.051636,0.750034 0.75598736,0.75598736 0 0 1 -0.02977,0.198422 l 2.353283,2.357252 a 0.19842189,0.19842189 0 0 1 0,0.279775 m -3.85335,-0.279779 a 0.19842189,0.19842189 0 0 0 0,0.279776 l 0.281758,0.281759 a 0.19842189,0.19842189 0 0 0 0.279776,0 l 1.085367,-1.083383 -0.561533,-0.561534 m 2.428684,-2.265979 -0.793688,0.396844 v 0.396844 l -0.430575,0.430575 0.396843,0.396844 0.430576,-0.430576 h 0.396844 l 0.396843,-0.793687 z"
+       id="path21719"
+       style="fill:#e10098;fill-opacity:1;stroke-width:0.198421" />
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-weight:normal;font-size:10.5833px;line-height:0;font-family:sans-serif;fill:#e10098;fill-opacity:1;stroke:none;stroke-width:0.264583"
+       x="17.004507"
+       y="27.719427"
+       id="text2976"><tspan
+         sodipodi:role="line"
+         id="tspan2974"
+         style="font-style:normal;font-variant:normal;font-weight:300;font-stretch:normal;font-size:4.93889px;line-height:1.05;font-family:Rubik;-inkscape-font-specification:'Rubik, Light';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:center;text-anchor:middle;stroke-width:0.264583;fill:#e10098;fill-opacity:1"
+         x="17.004507"
+         y="27.719427">GraphQL</tspan><tspan
+         sodipodi:role="line"
+         style="font-style:normal;font-variant:normal;font-weight:300;font-stretch:normal;font-size:4.93889px;line-height:1.05;font-family:Rubik;-inkscape-font-specification:'Rubik, Light';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:center;text-anchor:middle;stroke-width:0.264583;fill:#e10098;fill-opacity:1"
+         x="17.004507"
+         y="32.905262"
+         dx="0 0 0 0 0 -0.049426936"
+         id="tspan20834">Workbench</tspan></text>
+  </g>
+  <style
+     id="style824">svg{fill:color(display-p3 0.8824 0 0.5961);}</style>
+  <style
+     id="style21746">svg{fill:color(display-p3 0.8824 0 0.5961);}</style>
+</svg>

@@ -136,7 +136,7 @@ try {
     }
   }
 
-  const dirsToCopy = ["dist", "docs"];
+  const dirsToCopy = ["dist", "docs", "images"];
   for (const dir of dirsToCopy) {
     const src = join(pkgRoot, dir);
     if (existsSync(src)) {
