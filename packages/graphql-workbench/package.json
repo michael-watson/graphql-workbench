@@ -83,7 +83,7 @@
         "graphqlWorkbench.modelPath": {
           "type": "string",
           "default": "",
-          "description": "Path to custom GGUF embedding model (leave empty to use bundled model)"
+          "description": "Path to custom GGUF embedding model (leave empty to auto-download the default model on first use)"
         },
         "graphqlWorkbench.llmProvider": {
           "type": "string",
@@ -212,19 +212,13 @@
     "build": "node esbuild.config.mjs",
     "watch": "node esbuild.config.mjs --watch",
     "clean": "rm -rf dist *.tsbuildinfo",
-    "package": "vsce package",
+    "package": "npm run build && node scripts/prepare-package.mjs",
     "publish": "vsce publish",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.2.0",
-    "graphql": "^16.8.1",
-    "graphql-embedding": "^0.1.0",
-    "graphql-embedding-core": "^0.1.0",
-    "graphql-embedding-operation": "^0.1.0",
-    "graphql-embedding-parser": "^0.1.0",
-    "graphql-embedding-schema-design": "^0.1.0",
-    "pg": "^8.11.3"
+    "node-llama-cpp": "^3.0.0"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",
@@ -232,6 +226,13 @@
     "@types/vscode": "^1.85.0",
     "@vscode/vsce": "^3.2.1",
     "esbuild": "^0.20.0",
+    "graphql": "^16.8.1",
+    "graphql-embedding": "^0.1.0",
+    "graphql-embedding-core": "^0.1.0",
+    "graphql-embedding-operation": "^0.1.0",
+    "graphql-embedding-parser": "^0.1.0",
+    "graphql-embedding-schema-design": "^0.1.0",
+    "pg": "^8.11.3",
     "typescript": "^5.3.3"
   },
   "repository": {

@@ -13,7 +13,7 @@ All settings are under the `graphqlWorkbench` namespace. Open **Settings** (`Ctr
 
 | Setting | Type | Default | Description |
 |---------|------|---------|-------------|
-| `graphqlWorkbench.modelPath` | string | `""` (bundled model) | Path to a custom GGUF embedding model file. Leave empty to use the bundled model. |
+| `graphqlWorkbench.modelPath` | string | `""` (auto-download) | Path to a custom GGUF embedding model file. Leave empty to automatically download the default model (~313 MB) on first use. The model is cached in the extension's global storage. |
 
 ## Operation Generation
 
