@@ -143,6 +143,7 @@ export class EmbeddingManager {
   private vectorStore: VectorStore | undefined;
   private schema: GraphQLSchema | undefined;
   private dynamicOperationGenerator: DynamicOperationGeneratorInstance | undefined;
+  private lastDynamicGeneratorInitError: string | undefined;
   private llmProvider: LLMProviderInstance | undefined;
   private pglite: unknown;
   private pgPool: Pool | undefined;
@@ -353,6 +354,7 @@ export class EmbeddingManager {
    */
   private async initializeDynamicGenerator(): Promise<void> {
     const config = this.getConfig();
+    this.lastDynamicGeneratorInitError = undefined;
 
     try {
       const { DynamicOperationGenerator } = await loadOperation();
@@ -434,6 +436,7 @@ export class EmbeddingManager {
       this.log("Dynamic operation generator initialized (without schema validation)");
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
+      this.lastDynamicGeneratorInitError = message;
       this.log(`WARNING: Failed to initialize dynamic generator: ${message}`);
     }
   }
@@ -486,6 +489,7 @@ export class EmbeddingManager {
 
     // Initialize dynamic operation generator
     try {
+      this.lastDynamicGeneratorInitError = undefined;
       this.log(`Initializing LLM provider: ${config.llmProvider}...`);
 
       // Create LLM provider based on configuration
@@ -555,6 +559,7 @@ export class EmbeddingManager {
       this.log("Dynamic operation generator initialized");
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
+      this.lastDynamicGeneratorInitError = message;
       this.log(`WARNING: Failed to initialize LLM provider: ${message}`);
       this.dynamicOperationGenerator = undefined;
       this.llmProvider = undefined;
@@ -604,8 +609,11 @@ export class EmbeddingManager {
       await this.initializeDynamicGenerator();
 
       if (!this.dynamicOperationGenerator) {
+        const detail = this.lastDynamicGeneratorInitError
+          ? `Could not initialize operation generator: ${this.lastDynamicGeneratorInitError}.`
+          : "Could not initialize operation generator.";
         vscode.window.showWarningMessage(
-          "Could not initialize operation generator. Please re-embed the schema."
+          `${detail} Check GraphQL Workbench output for details, or re-embed the schema.`
         );
         return undefined;
       }
@@ -618,8 +626,11 @@ export class EmbeddingManager {
     this.log(`Current settings: minSimilarityScore=${config.minSimilarityScore}, maxDocuments=${config.maxDocuments}, maxValidationRetries=${config.maxValidationRetries}, temperature=${config.llmTemperature}`);
 
     if (!this.dynamicOperationGenerator || !this.embeddingProvider) {
+      const detail = this.lastDynamicGeneratorInitError
+        ? `Operation generator not available: ${this.lastDynamicGeneratorInitError}.`
+        : "Operation generator not available.";
       vscode.window.showWarningMessage(
-        "Operation generator not available. Please re-embed the schema."
+        `${detail} Check GraphQL Workbench output for details, or re-embed the schema.`
       );
       return undefined;
     }
