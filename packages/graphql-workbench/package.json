@@ -2,7 +2,7 @@
   "name": "graphql-workbench",
   "displayName": "GraphQL Workbench",
   "description": "Embed GraphQL schemas and generate operations from natural language",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "publisher": "graphql-embedding",
   "icon": "images/workbench-icon.png",
   "engines": {
