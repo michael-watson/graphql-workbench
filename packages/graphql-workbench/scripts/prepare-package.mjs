@@ -31,7 +31,7 @@ import {
 } from "fs";
 import { join, resolve, dirname } from "path";
 import { fileURLToPath } from "url";
-import { tmpdir } from "os";
+import { tmpdir, platform, arch } from "os";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const pkgRoot = resolve(__dirname, "..");
@@ -106,6 +106,36 @@ const EXCLUDED_PACKAGES = new Set([
   // cmake-js → url-join
   "url-join",
 ]);
+
+// --- Platform-specific VSIX support ---
+// Pass --target <platform> to build a platform-specific VSIX containing only
+// the matching @node-llama-cpp/* native binary. Without --target, the current
+// platform is detected automatically (for local development builds).
+const targetArgIdx = process.argv.indexOf("--target");
+const vsceTarget = targetArgIdx !== -1 ? process.argv[targetArgIdx + 1] : null;
+
+// Maps VS Code platform targets to @node-llama-cpp/* binary package names.
+// Unsupported targets (not listed here):
+//   alpine-x64, alpine-arm64 — node-llama-cpp ships glibc binaries only
+//   web — requires native Node.js modules
+const PLATFORM_BINARY_MAP = {
+  "darwin-arm64": "@node-llama-cpp/mac-arm64-metal",
+  "darwin-x64": "@node-llama-cpp/mac-x64",
+  "linux-x64": "@node-llama-cpp/linux-x64",
+  "linux-arm64": "@node-llama-cpp/linux-arm64",
+  "linux-armhf": "@node-llama-cpp/linux-armv7l",
+  "win32-x64": "@node-llama-cpp/win-x64",
+  "win32-arm64": "@node-llama-cpp/win-arm64",
+};
+
+const effectiveTarget = vsceTarget || `${platform()}-${arch()}`;
+const includedPlatformPkg = PLATFORM_BINARY_MAP[effectiveTarget] || null;
+
+if (includedPlatformPkg) {
+  console.log(`Target: ${effectiveTarget} → including ${includedPlatformPkg}`);
+} else {
+  console.warn(`Warning: no binary mapping for target "${effectiveTarget}"`);
+}
 
 // Create staging directory
 const stagingDir = join(tmpdir(), `graphql-workbench-package-${Date.now()}`);
@@ -199,14 +229,14 @@ try {
       continue;
     }
 
-    // Skip ALL @node-llama-cpp/* platform binary packages.
-    // These are platform-specific native binaries (including large CUDA/Vulkan
-    // variants). Since the VSIX is universal (not platform-specific), bundling
-    // any single platform's binaries is wrong. node-llama-cpp will download
-    // the correct binary for the user's platform at runtime.
+    // Skip @node-llama-cpp/* platform binary packages that don't match the
+    // target. Only the target platform's native binary is included; all others
+    // (including CUDA/Vulkan variants) are excluded.
     if (pkgName.startsWith("@node-llama-cpp/")) {
-      skippedCount++;
-      continue;
+      if (pkgName !== includedPlatformPkg) {
+        skippedCount++;
+        continue;
+      }
     }
 
     // Skip workspace package symlinks (they are bundled by esbuild)
@@ -231,6 +261,33 @@ try {
   }
 
   console.log(`Dependencies copied (${copiedCount} included, ${skippedCount} excluded).`);
+
+  // Ensure the target platform's binary package is present in staging.
+  // For cross-platform builds (e.g., building darwin-arm64 on a Linux CI runner),
+  // the package won't be locally installed, so download it from the npm registry.
+  if (includedPlatformPkg) {
+    const [scope, name] = includedPlatformPkg.split("/");
+    const platformPkgDir = join(stagingNodeModules, scope, name);
+    if (!existsSync(platformPkgDir)) {
+      const llamaSrcPkg = JSON.parse(readFileSync(
+        join(rootNodeModules, "node-llama-cpp", "package.json"), "utf8"
+      ));
+      const version = llamaSrcPkg.optionalDependencies?.[includedPlatformPkg];
+      if (version) {
+        console.log(`Downloading ${includedPlatformPkg}@${version} from npm registry...`);
+        mkdirSync(platformPkgDir, { recursive: true });
+        execSync(
+          `curl -sL "https://registry.npmjs.org/${scope}/${name}/-/${name}-${version}.tgz" | tar xz --strip-components=1 -C "${platformPkgDir}"`,
+          { stdio: "inherit" }
+        );
+        console.log(`Downloaded ${includedPlatformPkg}@${version}.`);
+      } else {
+        console.warn(`Warning: could not determine version for ${includedPlatformPkg}`);
+      }
+    } else {
+      console.log(`Platform binary ${includedPlatformPkg} already present from local install.`);
+    }
+  }
 
   // --- Prune large files not needed at runtime ---
 
@@ -307,19 +364,29 @@ try {
         }
       }
     }
-    // Remove all optionalDependencies (@node-llama-cpp/* platform binaries).
-    // The extension is a universal VSIX; platform binaries are downloaded at runtime.
+    // Remove optionalDependencies that aren't included in this build.
+    // Only the target platform's binary is kept.
     if (llamaPkg.optionalDependencies) {
-      removedCount += Object.keys(llamaPkg.optionalDependencies).length;
-      delete llamaPkg.optionalDependencies;
+      for (const dep of Object.keys(llamaPkg.optionalDependencies)) {
+        if (dep !== includedPlatformPkg) {
+          delete llamaPkg.optionalDependencies[dep];
+          removedCount++;
+        }
+      }
+      if (Object.keys(llamaPkg.optionalDependencies).length === 0) {
+        delete llamaPkg.optionalDependencies;
+      }
     }
     writeFileSync(llamaPkgPath, JSON.stringify(llamaPkg, null, 2) + "\n");
     console.log(`Patched node-llama-cpp/package.json (removed ${removedCount} build-only/platform deps).`);
   }
 
   // Run vsce package from the staging directory
-  console.log("Running vsce package...");
-  execSync("npx @vscode/vsce package", {
+  const vsceCmd = vsceTarget
+    ? `npx @vscode/vsce package --target ${vsceTarget}`
+    : "npx @vscode/vsce package";
+  console.log(`Running: ${vsceCmd}`);
+  execSync(vsceCmd, {
     cwd: stagingDir,
     stdio: "inherit",
   });
