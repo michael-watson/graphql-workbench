@@ -56,6 +56,10 @@
         "title": "GraphQL Workbench: Analyze Schema Design"
       },
       {
+        "command": "graphql-workbench.openExplorerPanel",
+        "title": "GraphQL Workbench: Open Explorer Panel"
+      },
+      {
         "command": "graphql-workbench.dismissLintViolation",
         "title": "GraphQL Workbench: Dismiss Lint Violation"
       },
@@ -202,6 +206,11 @@
         },
         {
           "command": "graphql-workbench.lintSchema",
+          "when": "resourceExtname == .graphql",
+          "group": "graphql-workbench"
+        },
+        {
+          "command": "graphql-workbench.openExplorerPanel",
           "when": "resourceExtname == .graphql",
           "group": "graphql-workbench"
         }
