@@ -6,6 +6,7 @@ Embed GraphQL schemas and generate operations from natural language queries dire
 
 - **Schema Embedding** -- Parse and embed `.graphql` schemas from local files or live endpoints into a vector store
 - **Operation Generation** -- Generate GraphQL queries, mutations, and subscriptions from natural language using an LLM
+- **Explorer Panel** -- An integrated Apollo Explorer webview for running generated operations against a live endpoint
 - **Schema Linting** -- Check schemas against naming convention and design rules with quick-fix dismissals
 - **Schema Design Analysis** -- LLM-powered analysis of your schema against best practice categories
 - **Endpoint Introspection** -- Download and save remote GraphQL schemas as `.graphql` files
@@ -18,7 +19,8 @@ Open the Command Palette (`Cmd+Shift+P` / `Ctrl+Shift+P`) and search for:
 |---------|-------------|
 | `GraphQL Workbench: Embed Schema from File` | Parse and embed a local `.graphql` schema |
 | `GraphQL Workbench: Embed Schema from Endpoint` | Introspect a GraphQL endpoint and embed its schema |
-| `GraphQL Workbench: Generate Operation` | Generate a GraphQL operation from a natural language description |
+| `GraphQL Workbench: Generate Operation` | Generate a GraphQL operation from a natural language description and open it in the Explorer panel |
+| `GraphQL Workbench: Open Explorer Panel` | Open the Apollo Explorer webview to run operations against a live endpoint |
 | `GraphQL Workbench: Introspect Endpoint to File` | Download a remote schema via introspection and save it as a `.graphql` file |
 | `GraphQL Workbench: Lint Schema` | Check a schema against naming convention and design rules |
 | `GraphQL Workbench: Analyze Schema Design` | Generate an LLM-powered best practices report for the embedded schema |
@@ -31,6 +33,7 @@ Right-click on a `.graphql` file in the Explorer or Editor to access:
 - **Embed Schema from File**
 - **Generate Operation** (editor only)
 - **Lint Schema**
+- **Open Explorer Panel** (editor only)
 
 ## Settings
 
@@ -99,13 +102,25 @@ These settings control the LLM used for operation generation and schema design a
 ### 2. Generate Operations
 
 1. Run `GraphQL Workbench: Generate Operation`
-2. Enter a natural language description of what you want:
+2. Select an embedding table from the quick-pick list (or enter a name manually)
+3. Enter a natural language description of what you want:
    - "get all users with their posts"
    - "create a new product with name and price"
    - "fetch order by id with line items"
-3. The generated operation opens in a new editor tab with example variables as comments
+4. The Explorer panel opens with the generated operation loaded into Apollo Explorer, ready to run against your endpoint
+5. The operation includes a `# Prompt:` comment at the top showing the original description
 
-### 3. Lint a Schema
+### 3. Use the Explorer Panel
+
+1. Run `GraphQL Workbench: Open Explorer Panel` (or generate an operation, which opens it automatically)
+2. Select an embedding table from the dropdown to load its schema
+3. Enter the endpoint URL for your GraphQL API
+4. Type a description and click **Generate** to create operations directly in the panel
+5. The embedded Apollo Explorer lets you run operations, view docs, and inspect results
+
+The Explorer panel is a singleton -- generating operations from the Command Palette will reuse the same panel rather than opening new ones.
+
+### 4. Lint a Schema
 
 1. Open a `.graphql` file and run `GraphQL Workbench: Lint Schema`
 2. Deselect any rules you want to skip from the picker
@@ -114,14 +129,14 @@ These settings control the LLM used for operation generation and schema design a
 
 See `docs/lint-rules.md` in the extension directory for the full list of rules.
 
-### 4. Analyze Schema Design
+### 5. Analyze Schema Design
 
 1. Embed a schema first (step 1 above)
 2. Run `GraphQL Workbench: Analyze Schema Design`
 3. A markdown report opens evaluating naming conventions, documentation, anti-patterns, query design, and mutation design
 4. Use **Markdown: Open Preview** to render the report
 
-### 5. Introspect an Endpoint
+### 6. Introspect an Endpoint
 
 1. Run `GraphQL Workbench: Introspect Endpoint to File`
 2. Enter the endpoint URL and optional auth headers

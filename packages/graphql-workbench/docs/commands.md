@@ -49,18 +49,16 @@ Introspects a live GraphQL endpoint and embeds the resulting schema into the vec
 **Command Palette:** `GraphQL Workbench: Generate Operation`
 **Context menus:** Editor right-click (on `.graphql` files)
 
-Generates a GraphQL operation from a natural language description using the embedded schema.
+Generates a GraphQL operation from a natural language description using the embedded schema and opens it in the Explorer panel.
 
 ### Steps
 
-1. Enter the embeddings table name to query.
+1. Select an embedding table from the quick-pick list. If tables exist in the vector store, they are listed for selection. An "Enter table name manually..." option is available if you need to specify a table not in the list. If no tables are found, you are prompted to enter a name directly.
 2. Describe the operation you want in plain language (e.g., "get all users with their posts").
 3. The extension searches the vector store for relevant schema elements.
-4. A GraphQL operation is generated and opened in a new editor tab alongside your current editor.
+4. The Explorer panel opens (or is revealed if already open) with the generated operation loaded into Apollo Explorer.
 
-### Generation Modes
-
-**Dynamic generation** (default, requires an LLM provider):
+### Generation Process
 
 - Embeds your query as a vector and performs similarity search.
 - Uses the LLM to identify the most relevant root field (Query, Mutation, or Subscription).
@@ -68,20 +66,39 @@ Generates a GraphQL operation from a natural language description using the embe
 - Uses the LLM to generate a complete GraphQL operation with example variables.
 - Validates the operation by parsing it. If parsing fails, the LLM retries (up to 5 times by default).
 
-**Legacy generation** (fallback):
-
-- Performs a text-based similarity search on the embedded schema.
-- Builds an operation from matched fields using the parsed schema AST.
-- Used when dynamic generation is disabled or fails.
-
 ### Output
 
-The generated operation opens in a new editor tab with:
+The generated operation is sent to the Explorer panel with:
 
+- A `# Prompt:` comment at the top showing the original natural language description
 - The GraphQL operation
-- Example variables as comments (if applicable)
+- Example variables (passed to Apollo Explorer's variables pane)
 
-An information message reports the generation method and metadata (operation type, root field, validation attempts).
+The Explorer panel's prompt input is also updated to show the description that was used. An information message reports the operation type, root field, and validation attempts.
+
+---
+
+## Open Explorer Panel
+
+**Command Palette:** `GraphQL Workbench: Open Explorer Panel`
+**Context menus:** Editor right-click (on `.graphql` files)
+
+Opens an integrated Apollo Explorer webview panel for building and running GraphQL operations against a live endpoint.
+
+### Panel Layout
+
+The panel contains:
+
+- **Embedding Table** dropdown -- select which embedded schema to use. Changing the selection reloads the Explorer with the new schema.
+- **Endpoint URL** input -- the GraphQL API URL that Apollo Explorer sends requests to. Changes are applied after a 1-second debounce.
+- **Describe op** input + **Generate** button -- generate operations directly from the panel without returning to the Command Palette.
+- **Apollo Explorer** (iframe) -- the full embedded Apollo Explorer for editing operations, viewing docs, and running requests.
+
+### Behavior
+
+- The panel is a **singleton**: only one Explorer panel exists at a time. Running the command again reveals the existing panel. The **Generate Operation** command also reuses this panel.
+- The schema SDL stored alongside the embeddings is loaded and passed to Apollo Explorer via the postMessage handshake protocol.
+- Generated operations (from either the panel's Generate button or the Command Palette command) include a `# Prompt:` comment and are injected into Apollo Explorer via the `SetOperation` message.
 
 ---
 
