@@ -2,7 +2,7 @@
   "name": "graphql-workbench",
   "displayName": "GraphQL Workbench",
   "description": "Embed GraphQL schemas and generate operations from natural language",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "publisher": "graphql-embedding",
   "icon": "images/workbench-icon.png",
   "engines": {
@@ -54,6 +54,10 @@
       {
         "command": "graphql-workbench.analyzeSchemaDesign",
         "title": "GraphQL Workbench: Analyze Schema Design"
+      },
+      {
+        "command": "graphql-workbench.openExplorerPanel",
+        "title": "GraphQL Workbench: Open Explorer Panel"
       },
       {
         "command": "graphql-workbench.dismissLintViolation",
@@ -202,6 +206,11 @@
         },
         {
           "command": "graphql-workbench.lintSchema",
+          "when": "resourceExtname == .graphql",
+          "group": "graphql-workbench"
+        },
+        {
+          "command": "graphql-workbench.openExplorerPanel",
           "when": "resourceExtname == .graphql",
           "group": "graphql-workbench"
         }

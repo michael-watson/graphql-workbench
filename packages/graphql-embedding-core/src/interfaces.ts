@@ -48,6 +48,12 @@ export interface VectorStore {
   close(): Promise<void>;
   /** Returns the count of documents in the store */
   count(): Promise<number>;
+  /** Returns the names of tables that contain an embedding column */
+  listTables(): Promise<string[]>;
+  /** Stores the original schema SDL alongside the embeddings */
+  storeSchemaSDL(sdl: string): Promise<void>;
+  /** Retrieves the stored schema SDL, or null if none exists */
+  getSchemaSDL(): Promise<string | null>;
 }
 
 export interface EmbeddingServiceOptions {

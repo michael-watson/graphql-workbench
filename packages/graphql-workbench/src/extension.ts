@@ -10,6 +10,7 @@ import {
   LintCodeActionProvider,
 } from "./commands/lint-schema";
 import { analyzeSchemaDesignCommand } from "./commands/analyze-schema-design";
+import { openExplorerPanelCommand } from "./commands/open-explorer-panel";
 
 let embeddingManager: EmbeddingManager | undefined;
 let outputChannel: vscode.OutputChannel | undefined;
@@ -41,7 +42,7 @@ export async function activate(
   const generateOperation = vscode.commands.registerCommand(
     "graphql-workbench.generateOperation",
     async () => {
-      await generateOperationCommand(embeddingManager!);
+      await generateOperationCommand(embeddingManager!, context.extensionUri);
     }
   );
 
@@ -74,6 +75,13 @@ export async function activate(
     "graphql-workbench.analyzeSchemaDesign",
     async () => {
       await analyzeSchemaDesignCommand(embeddingManager!);
+    }
+  );
+
+  const openExplorerPanel = vscode.commands.registerCommand(
+    "graphql-workbench.openExplorerPanel",
+    () => {
+      openExplorerPanelCommand(embeddingManager!, context.extensionUri);
     }
   );
 
@@ -122,6 +130,7 @@ export async function activate(
     lintDiagnostics,
     lintSchema,
     analyzeSchemaDesign,
+    openExplorerPanel,
     dismissLintViolation,
     dismissAllLintViolations,
     lintCodeActions

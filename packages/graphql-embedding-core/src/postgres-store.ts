@@ -25,6 +25,10 @@ export class PostgresVectorStore implements VectorStore {
     this.dimensions = options.dimensions;
   }
 
+  private get metaTableName(): string {
+    return `${this.tableName}_meta`;
+  }
+
   async initialize(): Promise<void> {
     const client = await this.pool.connect();
     try {
@@ -45,6 +49,11 @@ export class PostgresVectorStore implements VectorStore {
         ON ${this.tableName}
         USING ivfflat (embedding vector_cosine_ops)
         WITH (lists = 100);
+
+        CREATE TABLE IF NOT EXISTS ${this.metaTableName} (
+          key TEXT PRIMARY KEY,
+          value TEXT NOT NULL
+        );
       `);
     } finally {
       client.release();
@@ -226,6 +235,7 @@ export class PostgresVectorStore implements VectorStore {
 
   async clear(): Promise<void> {
     await this.pool.query(`TRUNCATE TABLE ${this.tableName}`);
+    await this.pool.query(`DELETE FROM ${this.metaTableName} WHERE key = 'schema_sdl'`);
   }
 
   async count(): Promise<number> {
@@ -233,6 +243,30 @@ export class PostgresVectorStore implements VectorStore {
       `SELECT COUNT(*) as count FROM ${this.tableName}`
     );
     return parseInt(result.rows[0]?.count ?? "0", 10);
+  }
+
+  async storeSchemaSDL(sdl: string): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO ${this.metaTableName} (key, value) VALUES ('schema_sdl', $1)
+       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+      [sdl]
+    );
+  }
+
+  async getSchemaSDL(): Promise<string | null> {
+    const result = await this.pool.query<{ value: string }>(
+      `SELECT value FROM ${this.metaTableName} WHERE key = 'schema_sdl'`
+    );
+    return result.rows[0]?.value ?? null;
+  }
+
+  async listTables(): Promise<string[]> {
+    const result = await this.pool.query<{ table_name: string }>(
+      `SELECT DISTINCT table_name FROM information_schema.columns
+       WHERE column_name = 'embedding' AND table_schema = 'public'
+       ORDER BY table_name`
+    );
+    return result.rows.map((row) => row.table_name);
   }
 
   async close(): Promise<void> {

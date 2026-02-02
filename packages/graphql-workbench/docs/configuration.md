@@ -29,9 +29,10 @@ These settings apply to dynamic operation generation and schema design analysis.
 
 | Setting | Type | Default | Description |
 |---------|------|---------|-------------|
-| `graphqlWorkbench.llmProvider` | `"ollama"` \| `"openai"` \| `"anthropic"` | `"ollama"` | Which LLM provider to use. |
+| `graphqlWorkbench.llmProvider` | `"ollama"` \| `"ollama-cloud"` \| `"openai"` \| `"anthropic"` | `"ollama"` | Which LLM provider to use. |
 | `graphqlWorkbench.llmModel` | string | `""` (provider default) | Model name to use. When empty, uses the provider's default: `qwen2.5` for Ollama, `gpt-4o-mini` for OpenAI, `claude-3-haiku` for Anthropic. |
 | `graphqlWorkbench.ollamaBaseUrl` | string | `"http://localhost:11434"` | Base URL for the Ollama API. |
+| `graphqlWorkbench.ollamaCloudApiKey` | string | `""` | Ollama Cloud API key. Required when `llmProvider` is `"ollama-cloud"`. |
 | `graphqlWorkbench.openaiApiKey` | string | `""` | OpenAI API key. Required when `llmProvider` is `"openai"`. |
 | `graphqlWorkbench.anthropicApiKey` | string | `""` | Anthropic API key. Required when `llmProvider` is `"anthropic"`. |
 
@@ -54,6 +55,12 @@ These parameters control how the LLM generates text. Lower temperature values pr
 3. Ensure Ollama is running on the default port (11434), or update `graphqlWorkbench.ollamaBaseUrl`.
 
 No API key is needed.
+
+### Ollama Cloud
+
+1. Set `graphqlWorkbench.llmProvider` to `"ollama-cloud"`.
+2. Set `graphqlWorkbench.ollamaCloudApiKey` to your API key.
+3. Optionally set `graphqlWorkbench.llmModel` (defaults to `qwen2.5`).
 
 ### OpenAI
 

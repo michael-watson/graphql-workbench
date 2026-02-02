@@ -1,32 +1,82 @@
 import * as vscode from "vscode";
 import type { EmbeddingManager } from "../services/embedding-manager";
+import {
+  openExplorerPanelCommand,
+  sendToExplorerPanel,
+} from "./open-explorer-panel";
 
 export async function generateOperationCommand(
-  manager: EmbeddingManager
+  manager: EmbeddingManager,
+  extensionUri: vscode.Uri
 ): Promise<void> {
   try {
-    // Prompt for table name
-    const currentTable = manager.getTableName();
-    const tableName = await vscode.window.showInputBox({
-      prompt: "Enter the embeddings table to query",
-      placeHolder: manager.getDefaultTableName(),
-      value: currentTable,
-      validateInput: (value) => {
-        if (!value) {
-          return null; // Allow empty to use default
-        }
-        if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(value)) {
-          return "Table name must start with a letter or underscore and contain only letters, numbers, and underscores";
-        }
-        return null;
-      },
-    });
-
-    if (tableName === undefined) {
-      return; // User cancelled
+    // Fetch available tables and let the user pick one
+    let tables: string[] = [];
+    try {
+      tables = await manager.listTables();
+    } catch {
+      // If listing fails (e.g. not yet initialized), fall through to manual entry
     }
 
-    const effectiveTableName = tableName || manager.getDefaultTableName();
+    let effectiveTableName: string;
+
+    if (tables.length > 0) {
+      const ENTER_CUSTOM = "Enter table name manually…";
+      const items = [
+        ...tables.map((t) => ({ label: t })),
+        { label: ENTER_CUSTOM },
+      ];
+
+      const picked = await vscode.window.showQuickPick(items, {
+        placeHolder: "Select an embedding table to query",
+      });
+
+      if (!picked) {
+        return; // User cancelled
+      }
+
+      if (picked.label === ENTER_CUSTOM) {
+        const custom = await vscode.window.showInputBox({
+          prompt: "Enter the embeddings table name",
+          placeHolder: manager.getDefaultTableName(),
+          value: manager.getDefaultTableName(),
+          validateInput: (value) => {
+            if (!value) {
+              return null;
+            }
+            if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(value)) {
+              return "Table name must start with a letter or underscore and contain only letters, numbers, and underscores";
+            }
+            return null;
+          },
+        });
+        if (custom === undefined) {
+          return;
+        }
+        effectiveTableName = custom || manager.getDefaultTableName();
+      } else {
+        effectiveTableName = picked.label;
+      }
+    } else {
+      const tableName = await vscode.window.showInputBox({
+        prompt: "Enter the embeddings table to query",
+        placeHolder: manager.getDefaultTableName(),
+        value: manager.getDefaultTableName(),
+        validateInput: (value) => {
+          if (!value) {
+            return null;
+          }
+          if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(value)) {
+            return "Table name must start with a letter or underscore and contain only letters, numbers, and underscores";
+          }
+          return null;
+        },
+      });
+      if (tableName === undefined) {
+        return;
+      }
+      effectiveTableName = tableName || manager.getDefaultTableName();
+    }
 
     // Prompt for natural language query
     const query = await vscode.window.showInputBox({
@@ -60,26 +110,19 @@ export async function generateOperationCommand(
           return;
         }
 
-        progress.report({ message: "Creating document..." });
+        progress.report({ message: "Opening Explorer panel..." });
 
-        // Build document content with operation and optional variables
-        let documentContent = result.operation;
+        // Prepend the prompt as a comment
+        const operationWithComment = `# Prompt: ${query}\n${result.operation}`;
 
-        // Add variables as a comment if present
-        if (result.variables && Object.keys(result.variables).length > 0) {
-          const variablesJson = JSON.stringify(result.variables, null, 2);
-          documentContent += `\n\n# Example variables:\n# ${variablesJson.split("\n").join("\n# ")}`;
-        }
-
-        // Create a new untitled document with the generated operation
-        const document = await vscode.workspace.openTextDocument({
-          language: "graphql",
-          content: documentContent,
-        });
-
-        await vscode.window.showTextDocument(document, {
-          preview: true,
-          viewColumn: vscode.ViewColumn.Beside,
+        // Open/reveal the Explorer panel and send the operation to it
+        openExplorerPanelCommand(manager, extensionUri);
+        sendToExplorerPanel({
+          type: "setGeneratedOperation",
+          tableName: effectiveTableName,
+          operation: operationWithComment,
+          variables: result.variables ?? {},
+          prompt: query,
         });
 
         // Build info message

@@ -677,6 +677,10 @@ export class EmbeddingManager {
     this.schema = buildSchema(schemaSDL);
     this.schemaSDL = schemaSDL;
 
+    // Persist SDL to globalState and vector store so it survives VS Code restarts
+    await this.context.globalState.update(`schemaSDL:${this.currentTableName}`, schemaSDL);
+    await this.vectorStore!.storeSchemaSDL(schemaSDL);
+
     // Initialize dynamic operation generator
     try {
       this.lastDynamicGeneratorInitError = undefined;
@@ -878,6 +882,7 @@ export class EmbeddingManager {
     await this.embeddingService!.clear();
     this.schema = undefined;
     this.schemaSDL = undefined;
+    await this.context.globalState.update(`schemaSDL:${this.currentTableName}`, undefined);
     this.dynamicOperationGenerator = undefined;
     if (this.llmProvider) {
       await this.llmProvider.dispose();
@@ -889,6 +894,33 @@ export class EmbeddingManager {
   async getDocumentCount(tableName?: string): Promise<number> {
     await this.ensureInitialized(tableName);
     return this.embeddingService!.count();
+  }
+
+  async listTables(): Promise<string[]> {
+    await this.ensureInitialized();
+    if (!this.vectorStore) {
+      return [];
+    }
+    return this.vectorStore.listTables();
+  }
+
+  async getSchemaSDL(tableName?: string): Promise<string | undefined> {
+    const key = tableName ?? this.currentTableName;
+    // Check in-memory first
+    if (key === this.currentTableName && this.schemaSDL) {
+      return this.schemaSDL;
+    }
+    // Fall back to globalState
+    const fromState = this.context.globalState.get<string>(`schemaSDL:${key}`);
+    if (fromState) {
+      return fromState;
+    }
+    // Fall back to vector store
+    if (this.vectorStore) {
+      const fromStore = await this.vectorStore.getSchemaSDL();
+      return fromStore ?? undefined;
+    }
+    return undefined;
   }
 
   async analyzeSchemaDesign(tableName?: string): Promise<SchemaDesignReportResult> {

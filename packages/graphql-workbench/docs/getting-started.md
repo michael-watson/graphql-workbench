@@ -37,11 +37,16 @@ Both commands will prompt you for a table name. The default (`graphql_embeddings
 
 ### 2. Generate an Operation
 
-Once your schema is embedded, run **GraphQL Workbench: Generate Operation** from the Command Palette. Enter a natural language description of the operation you want, such as:
+Once your schema is embedded, run **GraphQL Workbench: Generate Operation** from the Command Palette.
 
-> get all users with their posts
+1. Select an embedding table from the quick-pick list (or enter one manually).
+2. Enter a natural language description of the operation you want, such as:
 
-The extension uses your embedded schema and an LLM to generate a valid GraphQL operation, which opens in a new editor tab.
+   > get all users with their posts
+
+3. The Explorer panel opens with the generated operation loaded into Apollo Explorer, ready to run against your endpoint.
+
+You can also open the Explorer panel directly with **GraphQL Workbench: Open Explorer Panel** and generate operations from within it.
 
 ### 3. Lint Your Schema
 
