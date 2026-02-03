@@ -3,7 +3,7 @@
   "displayName": "GraphQL Workbench",
   "description": "Embed GraphQL schemas and generate operations from natural language",
   "version": "0.1.3",
-  "publisher": "graphql-embedding",
+  "publisher": "MichaelWatson",
   "icon": "images/workbench-icon.png",
   "engines": {
     "vscode": "^1.85.0"
