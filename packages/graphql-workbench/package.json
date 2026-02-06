@@ -22,7 +22,8 @@
   ],
   "activationEvents": [
     "onLanguage:graphql",
-    "workspaceContains:**/*.graphql"
+    "workspaceContains:**/*.graphql",
+    "workspaceContains:**/supergraph.yaml"
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -66,8 +67,97 @@
       {
         "command": "graphql-workbench.dismissAllLintViolations",
         "title": "GraphQL Workbench: Dismiss All Lint Violations"
+      },
+      {
+        "command": "graphql-workbench.refreshDesigns",
+        "title": "GraphQL Workbench: Refresh Designs",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "graphql-workbench.createDesign",
+        "title": "GraphQL Workbench: New Schema Design",
+        "icon": "$(add)"
+      },
+      {
+        "command": "graphql-workbench.createFederatedDesign",
+        "title": "GraphQL Workbench: New Federated Design"
+      },
+      {
+        "command": "graphql-workbench.addSubgraph",
+        "title": "GraphQL Workbench: Add Subgraph",
+        "icon": "$(add)"
+      },
+      {
+        "command": "graphql-workbench.openSchema",
+        "title": "GraphQL Workbench: Open Schema"
+      },
+      {
+        "command": "graphql-workbench.validateDesign",
+        "title": "GraphQL Workbench: Validate Design",
+        "icon": "$(check)"
+      },
+      {
+        "command": "graphql-workbench.deleteDesign",
+        "title": "GraphQL Workbench: Delete Design",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "graphql-workbench.analyzeSchemaFromTree",
+        "title": "Analyze Schema Design"
+      },
+      {
+        "command": "graphql-workbench.lintSchemaFromTree",
+        "title": "Lint Schema"
+      },
+      {
+        "command": "graphql-workbench.renameSubgraph",
+        "title": "Rename Subgraph"
+      },
+      {
+        "command": "graphql-workbench.deleteSubgraph",
+        "title": "Delete Subgraph",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "graphql-workbench.embedDesign",
+        "title": "Embed Schema",
+        "icon": "$(database)"
+      },
+      {
+        "command": "graphql-workbench.generateOperationForDesign",
+        "title": "Generate Operation"
+      },
+      {
+        "command": "graphql-workbench.clearDesignEmbeddings",
+        "title": "Clear Embeddings"
+      },
+      {
+        "command": "graphql-workbench.reEmbedDesign",
+        "title": "Re-embed Schema"
+      },
+      {
+        "command": "graphql-workbench.embeddingStatusClick",
+        "title": "Embed Schema"
       }
     ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "schema-design-workbench",
+          "title": "Schema Design Workbench",
+          "icon": "images/workbench-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "schema-design-workbench": [
+        {
+          "id": "schema-design-workbench.designs",
+          "name": "Designs",
+          "when": "config.graphqlWorkbench.enableDesignWorkbench"
+        }
+      ]
+    },
     "configuration": {
       "title": "GraphQL Workbench",
       "properties": {
@@ -167,6 +257,21 @@
           "minimum": 1,
           "maximum": 10,
           "description": "Maximum attempts to fix invalid generated operations"
+        },
+        "graphqlWorkbench.enableDesignWorkbench": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show the Schema Design Workbench activity bar tab"
+        },
+        "graphqlWorkbench.roverPath": {
+          "type": "string",
+          "default": "rover",
+          "description": "Path to the Rover CLI executable for federated schema validation"
+        },
+        "graphqlWorkbench.validateOnSave": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically validate schema designs on save"
         }
       }
     },
@@ -178,6 +283,54 @@
         },
         {
           "command": "graphql-workbench.dismissAllLintViolations",
+          "when": "false"
+        },
+        {
+          "command": "graphql-workbench.addSubgraph",
+          "when": "false"
+        },
+        {
+          "command": "graphql-workbench.openSchema",
+          "when": "false"
+        },
+        {
+          "command": "graphql-workbench.deleteDesign",
+          "when": "false"
+        },
+        {
+          "command": "graphql-workbench.analyzeSchemaFromTree",
+          "when": "false"
+        },
+        {
+          "command": "graphql-workbench.lintSchemaFromTree",
+          "when": "false"
+        },
+        {
+          "command": "graphql-workbench.renameSubgraph",
+          "when": "false"
+        },
+        {
+          "command": "graphql-workbench.deleteSubgraph",
+          "when": "false"
+        },
+        {
+          "command": "graphql-workbench.embedDesign",
+          "when": "false"
+        },
+        {
+          "command": "graphql-workbench.generateOperationForDesign",
+          "when": "false"
+        },
+        {
+          "command": "graphql-workbench.clearDesignEmbeddings",
+          "when": "false"
+        },
+        {
+          "command": "graphql-workbench.reEmbedDesign",
+          "when": "false"
+        },
+        {
+          "command": "graphql-workbench.embeddingStatusClick",
           "when": "false"
         }
       ],
@@ -214,6 +367,104 @@
           "when": "resourceExtname == .graphql",
           "group": "graphql-workbench"
         }
+      ],
+      "view/title": [
+        {
+          "command": "graphql-workbench.createDesign",
+          "when": "view == schema-design-workbench.designs",
+          "group": "navigation@1"
+        },
+        {
+          "command": "graphql-workbench.refreshDesigns",
+          "when": "view == schema-design-workbench.designs",
+          "group": "navigation@2"
+        },
+        {
+          "command": "graphql-workbench.createFederatedDesign",
+          "when": "view == schema-design-workbench.designs"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "graphql-workbench.validateDesign",
+          "when": "view == schema-design-workbench.designs && viewItem =~ /^design-/",
+          "group": "inline"
+        },
+        {
+          "command": "graphql-workbench.addSubgraph",
+          "when": "view == schema-design-workbench.designs && viewItem == design-federated",
+          "group": "inline"
+        },
+        {
+          "command": "graphql-workbench.openSchema",
+          "when": "view == schema-design-workbench.designs && viewItem == schema-file",
+          "group": "navigation"
+        },
+        {
+          "command": "graphql-workbench.analyzeSchemaFromTree",
+          "when": "view == schema-design-workbench.designs && viewItem == schema-file",
+          "group": "1_actions"
+        },
+        {
+          "command": "graphql-workbench.lintSchemaFromTree",
+          "when": "view == schema-design-workbench.designs && viewItem == schema-file",
+          "group": "1_actions"
+        },
+        {
+          "command": "graphql-workbench.analyzeSchemaFromTree",
+          "when": "view == schema-design-workbench.designs && viewItem == design-standalone",
+          "group": "1_actions"
+        },
+        {
+          "command": "graphql-workbench.lintSchemaFromTree",
+          "when": "view == schema-design-workbench.designs && viewItem == design-standalone",
+          "group": "1_actions"
+        },
+        {
+          "command": "graphql-workbench.deleteDesign",
+          "when": "view == schema-design-workbench.designs && viewItem =~ /^design-/",
+          "group": "2_danger"
+        },
+        {
+          "command": "graphql-workbench.renameSubgraph",
+          "when": "view == schema-design-workbench.designs && viewItem == subgraph",
+          "group": "1_actions"
+        },
+        {
+          "command": "graphql-workbench.deleteSubgraph",
+          "when": "view == schema-design-workbench.designs && viewItem == subgraph",
+          "group": "2_danger"
+        },
+        {
+          "command": "graphql-workbench.embedDesign",
+          "when": "view == schema-design-workbench.designs && viewItem =~ /^design-/",
+          "group": "0_embedding@1"
+        },
+        {
+          "command": "graphql-workbench.generateOperationForDesign",
+          "when": "view == schema-design-workbench.designs && viewItem =~ /^design-/",
+          "group": "0_embedding@2"
+        },
+        {
+          "command": "graphql-workbench.clearDesignEmbeddings",
+          "when": "view == schema-design-workbench.designs && viewItem =~ /^design-/",
+          "group": "0_embedding@3"
+        },
+        {
+          "command": "graphql-workbench.embedDesign",
+          "when": "view == schema-design-workbench.designs && viewItem == embedding-status",
+          "group": "1_embedding@1"
+        },
+        {
+          "command": "graphql-workbench.reEmbedDesign",
+          "when": "view == schema-design-workbench.designs && viewItem == embedding-status",
+          "group": "1_embedding@2"
+        },
+        {
+          "command": "graphql-workbench.clearDesignEmbeddings",
+          "when": "view == schema-design-workbench.designs && viewItem == embedding-status",
+          "group": "2_danger"
+        }
       ]
     }
   },
@@ -228,7 +479,8 @@
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.2.0",
-    "node-llama-cpp": "^3.0.0"
+    "node-llama-cpp": "^3.0.0",
+    "yaml": "^2.3.0"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",
