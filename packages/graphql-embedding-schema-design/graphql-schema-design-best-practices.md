@@ -1,6 +1,6 @@
 # GraphQL Schema Design Best Practices
 
-A compilation of schema design best practices drawing from Apollo GraphQL's official guidance, Michael Watson's work on federated schema design, and the broader GraphQL community.
+A compilation of schema design best practices drawing from Apollo GraphQL's official guidance, Michael Watson's work on federated schema design, Yelp's internal GraphQL schema design and nullability guidelines, and the broader GraphQL community.
 
 ---
 
@@ -11,6 +11,8 @@ A compilation of schema design best practices drawing from Apollo GraphQL's offi
 - [Naming Conventions](#naming-conventions)
 - [Query Design](#query-design)
 - [Mutation Design](#mutation-design)
+- [Type Design and Structure](#type-design-and-structure)
+- [Nullability](#nullability)
 - [Schema Expressiveness and Documentation](#schema-expressiveness-and-documentation)
 - [Schema Stewardship](#schema-stewardship)
 - [Performance Considerations](#performance-considerations)
@@ -33,6 +35,10 @@ A schema should represent product functions and domain boundaries rather than mi
 ### Avoid Single-Client Over-Optimization
 
 Consult multiple client teams early and continuously. Aggregate feedback across different consumers rather than designing for one specific application's needs. The schema should serve as a reusable platform across all clients.
+
+### Describe Data, Not Views
+
+Focus schemas on underlying data structures rather than specific UI implementations. This ensures flexibility across different platforms and interfaces. Return domain types (e.g., `User`) for profile components instead of creating view-specific types like `ProfileCardData`.
 
 ### Treat Your Schema as a Platform
 
@@ -121,6 +127,25 @@ type shippingAddress { ... }  # incorrect
 type ShippingAddressType { ... }  # incorrect — avoid "Type" suffix
 ```
 
+### Be Specific When Naming Types
+
+Use specific, namespaced type names to reduce ambiguity and naming collisions, especially in large schemas shared across teams. For example, prefer `BusinessCategory` over `Category` — generic names risk conflicting with types from other domains.
+
+### Don't Namespace Fields
+
+Fields are implicitly namespaced by their parent type, so avoid redundant prefixes in field names:
+
+```graphql
+type BusinessAddress {
+  """
+  Formatted address based on locale
+  """
+  formatted: String
+}
+```
+
+Use `formatted`, not `formattedBusinessAddress`. The parent type already provides the context.
+
 ### Enums: PascalCase Names, SCREAMING_SNAKE_CASE Values
 
 Enum type names should use `PascalCase`. Enum values should use `SCREAMING_SNAKE_CASE` since they are similar to constants.
@@ -165,6 +190,10 @@ Having a `users` query in one service and a `getProducts` query in another break
 ---
 
 ## Query Design
+
+### Keep Top-Level Queries Minimal
+
+Model data as a tree with core types as root nodes. Before adding new top-level queries, consider whether the data fits better as an attribute of an existing type. For example, add `claimability` as a `Business` attribute rather than `canClaimBusiness` as a root query.
 
 ### Design Finer-Grained Queries
 
@@ -253,9 +282,201 @@ patchProduct(id: ID!, input: ProductInput!): Product
 
 ---
 
+## Type Design and Structure
+
+### Categorize Types by Scope
+
+Types fall into two categories:
+
+1. **Core types** — Widely used across teams (e.g., `Business`, `User`). These warrant higher scrutiny during code reviews and urgent triage for runtime issues.
+2. **Domain-specific types** — Used by one or few components (e.g., `BusinessClaimability`). These have narrower impact and can tolerate more aggressive non-nullability.
+
+### Use Existing Standardized Types and Scalars
+
+Leverage standardized types for common concepts like photos, dates, and times to maintain consistency across the schema. Avoid encoding structured data as raw strings.
+
+```graphql
+type Review {
+  uploadedPhoto: BusinessPhoto
+  createdAt: DateTime
+}
+```
+
+Not: `uploadedPhotoUrl: String` or `createdAt: String`
+
+### Group Related Fields Together
+
+Create nested types for related field groups to reduce bloat on core types and improve discoverability:
+
+```graphql
+type BusinessAdvertising {
+  isAdvertiser: Boolean!
+  clicks: Int!
+  revenueFromCampaign: Float!
+  keywords: [String!]!
+}
+
+extend type Business {
+  advertising: BusinessAdvertising
+}
+```
+
+Consider the "rule of three" — start with direct fields, then refactor into subgroups as complexity grows.
+
+### Link via Types, Not IDs
+
+Reference types directly rather than returning IDs, enabling flexible data fetching without additional queries:
+
+```graphql
+type Review {
+  """
+  The business this review is about
+  """
+  business: Business
+}
+```
+
+Not: `businessId: Int`
+
+---
+
+## Nullability
+
+Fields are nullable by default in GraphQL to support schema evolution and maintain backwards compatibility. Getting nullability right is important — nullable fields complicate client development by forcing explicit null handling, while overly aggressive non-nullability risks cascading failures when a non-nullable field resolves to null and GraphQL nullifies the entire parent object up the tree.
+
+### Scalar Fields
+
+Don't make scalar fields nullable when null makes no semantic sense. For example, a `Money` type requires both `value` and `currencyCode` to be meaningful — these should be non-nullable. However, fields that might plausibly become null in the future (like `location: Location`) should remain nullable.
+
+```graphql
+type Money {
+  value: Int!
+  currencyCode: String!
+}
+```
+
+### Type Complexity and Usage
+
+Larger, widely-used types should have more nullable fields. If a non-nullable field errors out, the entire type nullifies. Complex types are more likely to have edge cases where fields could plausibly be absent.
+
+For example, making `headerPhoto: Photo!` non-nullable on `Business` risks nullifying the entire `Business` object if the photo resolver fails. A `Photo` type's own fields can more aggressively be non-nullable since losing one photo has less impact.
+
+### Semantic Nulls and Type Design
+
+When you frequently expect fields to be null in normal circumstances, consider using unions or interfaces to create distinct types. This improves self-documentation and reduces nullable fields.
+
+```graphql
+interface User {
+  name: String!
+  reviews: [Review!]!
+}
+
+type NormalUser implements User {
+  name: String!
+  reviews: [Review!]!
+}
+
+type EliteUser implements User {
+  name: String!
+  reviews: [Review!]!
+  yearsElite: [Year!]!
+}
+```
+
+### Lists
+
+Lists should not be null, and their contents should not be null either. Return empty lists instead of null, and filter null items server-side.
+
+```graphql
+# Preferred
+reviews: [Review!]!
+
+# Avoid
+reviews: [Review]
+```
+
+### Booleans
+
+Booleans should not be nullable. Null doesn't clearly represent true or false. If a third state exists, use an enum instead.
+
+```graphql
+# Preferred
+hasDelivery: Boolean!
+
+# If a third state is needed, use an enum
+enum DeliveryStatus {
+  AVAILABLE
+  UNAVAILABLE
+  UNKNOWN
+}
+```
+
+### Enums
+
+Enums should not be nullable. Null states should be explicit enum values with descriptive names rather than null.
+
+```graphql
+enum ReviewState {
+  REVIEWED
+  DRAFT
+  NONE
+  ERROR
+  NOT_APPLICABLE
+}
+
+type Business {
+  reviewState: ReviewState!
+}
+```
+
+### Strings
+
+Prefer nullable strings over empty strings. Empty strings create confusing UI states. Use `caption: String` rather than `caption: String!` to force null-handling at the client level rather than relying on empty values to signal absence.
+
+```graphql
+# Preferred — nullable, forces client to handle absence explicitly
+caption: String
+
+# Avoid — non-nullable can lead to empty string confusion
+caption: String!
+```
+
+---
+
 ## Schema Expressiveness and Documentation
 
 A good schema conveys meaning about the underlying nodes in a graph and the relationships between them. Documentation is a core dimension of schema expressiveness.
+
+### Use Triple Quotes for Descriptions
+
+Use triple quotes (`"""`) for documentation, not hashtags (`#`). Triple quotes are parsed as descriptions and appear in introspection results and tooling; hashtags are ignored by the parser.
+
+```graphql
+extend type Business {
+  """
+  The business name (e.g., "The French Laundry")
+  """
+  name: String
+}
+```
+
+### Space Out Field Descriptions
+
+Add newlines between field descriptions for improved readability:
+
+```graphql
+type Banner {
+  """
+  Logo image URL
+  """
+  logoUrl: String
+
+  """
+  Heading starting portion
+  """
+  headingStart: String
+}
+```
 
 ### Document Everything in SDL
 
@@ -291,6 +512,29 @@ type Product {
     "Maximum number of reviews to return."
     first: Int = 10
   ): [Review!]!
+}
+```
+
+### Be Explicit with Descriptions
+
+Provide comprehensive context using first-principles explanations. Avoid team-specific acronyms, describe all enum values, and link to source documentation. Frame descriptions so that a new team member with no prior context can understand the field:
+
+```graphql
+extend type Business {
+  """
+  Returns a list of Yelfies.
+
+  A Yelfie is a user photo taken at a business with special filters.
+  See y/yelfies for more information.
+  """
+  getYelfies(
+    """
+    Filter by Yelfie type (e.g., "smilingFace", "eatingFood").
+
+    Defined in yelfie.json config — see y/yelfie-type-docs
+    """
+    yelfieType: String!
+  ): [Yelfie]
 }
 ```
 
@@ -407,6 +651,10 @@ query SearchResults($query: String!) {
 | Client-specific types (`WebUser`, `MobileUser`) | Creates fragmentation, increases maintenance | Design generic types serving all clients |
 | Generic multi-purpose mutations | Hard to validate, unclear intent | Create single-purpose mutations |
 | `Type`/`Object`/`Interface` suffixes | Redundant — the SDL already conveys the kind | Use clean PascalCase names |
+| Nullable booleans and enums | Null doesn't represent true/false; hides a third state | Use non-nullable booleans or explicit enum values |
+| Non-nullable strings defaulting to `""` | Empty strings create confusing UI states | Use nullable strings to signal absence |
+| View-specific types (`ProfileCardData`) | Couples schema to UI, reduces reusability | Describe data, not views — return domain types |
+| Hashtag comments (`#`) for documentation | Ignored by the parser, invisible in introspection | Use triple-quote descriptions (`"""`) |
 
 ---
 
@@ -420,3 +668,5 @@ query SearchResults($query: String!) {
 - [Apollo GraphQL — 10 Best Practices for Schema Stewardship (Part 2)](https://www.apollographql.com/blog/community/graphql-champions/10-best-practices-for-schema-stewardship-part-2-of-2/)
 - [Apollo GraphQL — Schema Basics](https://www.apollographql.com/docs/apollo-server/schema/schema)
 - [GraphQL.org — Best Practices](https://graphql.org/learn/best-practices/)
+- [Yelp — GraphQL Schema Design Guidelines](https://yelp.github.io/graphql-guidelines/schema-design.html)
+- [Yelp — Nullability Guidelines](https://yelp.github.io/graphql-guidelines/nullability.html)

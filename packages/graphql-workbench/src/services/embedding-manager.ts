@@ -774,6 +774,124 @@ export class EmbeddingManager {
     };
   }
 
+  /**
+   * Incrementally update embeddings for a schema.
+   * Only embeds changed/new documents and deletes removed ones.
+   */
+  async embedSchemaIncremental(
+    schemaSDL: string,
+    tableName?: string
+  ): Promise<{
+    added: number;
+    updated: number;
+    deleted: number;
+    unchanged: number;
+    durationMs: number;
+  }> {
+    const startTime = Date.now();
+    await this.ensureInitialized(tableName);
+
+    const { buildSchema } = await loadGraphQL();
+    const { parseSchema } = await loadParser();
+
+    this.log("Parsing new schema for incremental update...");
+    const newDocuments = parseSchema(schemaSDL);
+    const newDocsMap = new Map(newDocuments.map((d) => [d.id, d]));
+    const newIds = new Set(newDocuments.map((d) => d.id));
+
+    // Get old schema from vector store meta table
+    const oldSDL = await this.vectorStore!.getSchemaSDL();
+
+    let oldIds = new Set<string>();
+    if (oldSDL) {
+      this.log("Parsing old schema from meta table...");
+      try {
+        const oldDocuments = parseSchema(oldSDL);
+        oldIds = new Set(oldDocuments.map((d) => d.id));
+        this.log(`Old schema had ${oldDocuments.length} documents`);
+      } catch (err) {
+        this.log(`Failed to parse old schema, will do full re-embed: ${err}`);
+        // Fall back to full embed
+        const result = await this.embedSchema(schemaSDL, tableName);
+        return {
+          added: result.embeddedCount,
+          updated: 0,
+          deleted: 0,
+          unchanged: 0,
+          durationMs: result.durationMs,
+        };
+      }
+    } else {
+      this.log("No existing schema in meta table, will do full embed");
+      const result = await this.embedSchema(schemaSDL, tableName);
+      return {
+        added: result.embeddedCount,
+        updated: 0,
+        deleted: 0,
+        unchanged: 0,
+        durationMs: result.durationMs,
+      };
+    }
+
+    // Calculate diff
+    const toAdd: string[] = [];
+    const toDelete: string[] = [];
+    let unchanged = 0;
+
+    for (const id of newIds) {
+      if (!oldIds.has(id)) {
+        toAdd.push(id);
+      } else {
+        unchanged++;
+      }
+    }
+
+    for (const id of oldIds) {
+      if (!newIds.has(id)) {
+        toDelete.push(id);
+      }
+    }
+
+    this.log(`Schema diff: ${toAdd.length} to add, ${toDelete.length} to delete, ${unchanged} unchanged`);
+
+    // Delete removed documents
+    if (toDelete.length > 0) {
+      this.log(`Deleting ${toDelete.length} removed documents...`);
+      await this.vectorStore!.delete(toDelete);
+    }
+
+    // Embed and store new documents
+    let addedCount = 0;
+    if (toAdd.length > 0) {
+      this.log(`Embedding ${toAdd.length} new/changed documents...`);
+      const docsToEmbed = toAdd
+        .map((id) => newDocsMap.get(id))
+        .filter((d): d is NonNullable<typeof d> => d !== undefined);
+
+      const result = await this.embeddingService!.embedAndStore(docsToEmbed);
+      addedCount = result.embeddedCount;
+    }
+
+    // Update schema SDL in meta table
+    await this.vectorStore!.storeSchemaSDL(schemaSDL);
+    await this.context.globalState.update(`schemaSDL:${this.currentTableName}`, schemaSDL);
+
+    // Update in-memory schema
+    this.schema = buildSchema(schemaSDL);
+    this.schemaSDL = schemaSDL;
+
+    const durationMs = Date.now() - startTime;
+    this.log(`Incremental update complete in ${this.formatDuration(durationMs)}: ${addedCount} added, ${toDelete.length} deleted, ${unchanged} unchanged`);
+
+    return {
+      added: addedCount,
+      updated: 0, // With content-based IDs, updates appear as delete+add
+      deleted: toDelete.length,
+      unchanged,
+      durationMs,
+    };
+  }
+
   async generateOperation(
     query: string,
     tableName?: string
@@ -876,19 +994,24 @@ export class EmbeddingManager {
     }));
   }
 
-  async clearEmbeddings(): Promise<void> {
-    await this.ensureInitialized();
-    this.log("Clearing all embeddings...");
+  async clearEmbeddings(tableName?: string): Promise<void> {
+    await this.ensureInitialized(tableName);
+    const targetTable = tableName ?? this.currentTableName;
+    this.log(`Clearing embeddings from table: ${targetTable}...`);
     await this.embeddingService!.clear();
-    this.schema = undefined;
-    this.schemaSDL = undefined;
-    await this.context.globalState.update(`schemaSDL:${this.currentTableName}`, undefined);
-    this.dynamicOperationGenerator = undefined;
-    if (this.llmProvider) {
-      await this.llmProvider.dispose();
-      this.llmProvider = undefined;
+    await this.context.globalState.update(`schemaSDL:${targetTable}`, undefined);
+
+    // Only clear in-memory state if clearing the current table
+    if (targetTable === this.currentTableName) {
+      this.schema = undefined;
+      this.schemaSDL = undefined;
+      this.dynamicOperationGenerator = undefined;
+      if (this.llmProvider) {
+        await this.llmProvider.dispose();
+        this.llmProvider = undefined;
+      }
     }
-    this.log("All embeddings cleared");
+    this.log(`Embeddings cleared from table: ${targetTable}`);
   }
 
   async getDocumentCount(tableName?: string): Promise<number> {

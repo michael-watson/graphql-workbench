@@ -15,6 +15,7 @@ graphql-embedding-core (depends on parser)
          ↓
 graphql-embedding (depends on core)
 graphql-embedding-operation (depends on core and parser)
+graphql-embedding-schema-design (depends on core)
          ↓
 graphql-workbench (depends on all above, separate build)
 ```
@@ -26,11 +27,13 @@ Build order must respect these dependencies. The root `tsconfig.json` uses TypeS
 ## Package Responsibilities
 
 ### graphql-embedding-parser
+
 **Location:** `packages/graphql-embedding-parser/`
 
 Parses GraphQL schema AST into `EmbeddingDocument` objects. Uses the `visit` function from `graphql-js` to traverse schema definitions.
 
 **Key exports:**
+
 - `parseSchema(schemaAst: DocumentNode): EmbeddingDocument[]`
 - `EmbeddingDocument` type
 - `DocumentType` type
@@ -38,11 +41,13 @@ Parses GraphQL schema AST into `EmbeddingDocument` objects. Uses the `visit` fun
 **When to modify:** Changes to how schemas are parsed, new document types, additional metadata extraction.
 
 ### graphql-embedding-core
+
 **Location:** `packages/graphql-embedding-core/`
 
 Defines interfaces and provides vector store implementations.
 
 **Key exports:**
+
 - `EmbeddingProvider` interface - implement this for custom embedding models
 - `VectorStore` interface - implement this for custom vector databases
 - `EmbeddingService` class - orchestrates embedding and storage
@@ -52,11 +57,13 @@ Defines interfaces and provides vector store implementations.
 **When to modify:** New vector store implementations, changes to interfaces, embedding service logic.
 
 ### graphql-embedding
+
 **Location:** `packages/graphql-embedding/`
 
 Provides a concrete `EmbeddingProvider` implementation using node-llama-cpp with a local GGUF model.
 
 **Key exports:**
+
 - `LlamaEmbeddingProvider` class
 
 **When to modify:** Changes to the llama.cpp integration, model loading, embedding generation.
@@ -64,22 +71,41 @@ Provides a concrete `EmbeddingProvider` implementation using node-llama-cpp with
 **Note:** The `models/` directory contains the GGUF model file. This is a large binary file.
 
 ### graphql-embedding-operation
+
 **Location:** `packages/graphql-embedding-operation/`
 
 Generates GraphQL operations from natural language by searching embedded documents and constructing queries/mutations.
 
 **Key exports:**
+
 - `DynamicOperationGenerator` class
 - `DynamicGeneratedOperation` type
 
 **When to modify:** Operation generation logic, LLM-based field selection, validation retry loop.
 
+### graphql-embedding-schema-design
+
+**Location:** `packages/graphql-embedding-schema-design/`
+
+Analyzes GraphQL schemas against design best practices using embedded documents and LLMs.
+
+**Key exports:**
+
+- `SchemaDesignAnalyzer` class
+- `SchemaDesignAnalyzerOptions` type
+- `SchemaDesignReport` type
+- Re-exports LLM providers (`OllamaProvider`, `OpenAIProvider`, `AnthropicProvider`) from core
+
+**When to modify:** Changes to schema design analysis, best practice rules, or report generation.
+
 ### graphql-workbench
+
 **Location:** `packages/graphql-workbench/`
 
 VS Code extension that provides commands for embedding schemas and generating operations.
 
 **Key files:**
+
 - `src/extension.ts` - Extension entry point, command registration
 - `src/services/embedding-manager.ts` - Manages embedding provider and vector store lifecycle
 - `src/commands/*.ts` - Individual command implementations
@@ -89,6 +115,7 @@ VS Code extension that provides commands for embedding schemas and generating op
 **When to modify:** Adding new commands, changing UI/UX, updating settings.
 
 **Special considerations:**
+
 - Uses dynamic imports for ESM-only packages (PGLite, node-llama-cpp)
 - Must externalize native modules in esbuild config
 - Settings defined in `package.json` under `contributes.configuration`
@@ -99,18 +126,27 @@ VS Code extension that provides commands for embedding schemas and generating op
 
 1. Create a new file in `packages/graphql-embedding-core/src/` (e.g., `milvus-store.ts`)
 2. Implement the `VectorStore` interface:
+
    ```typescript
-   import type { VectorStore, StoredDocument, SearchResult } from "./interfaces.js";
+   import type {
+     VectorStore,
+     StoredDocument,
+     SearchResult,
+   } from "./interfaces.js";
 
    export class MilvusVectorStore implements VectorStore {
-     async initialize(): Promise<void> { }
-     async store(documents: StoredDocument[]): Promise<void> { }
-     async search(embedding: number[], limit?: number): Promise<SearchResult[]> { }
-     async delete(ids: string[]): Promise<void> { }
-     async clear(): Promise<void> { }
-     async close(): Promise<void> { }
+     async initialize(): Promise<void> {}
+     async store(documents: StoredDocument[]): Promise<void> {}
+     async search(
+       embedding: number[],
+       limit?: number,
+     ): Promise<SearchResult[]> {}
+     async delete(ids: string[]): Promise<void> {}
+     async clear(): Promise<void> {}
+     async close(): Promise<void> {}
    }
    ```
+
 3. Export from `packages/graphql-embedding-core/src/index.ts`
 4. Add any new dependencies to `packages/graphql-embedding-core/package.json` as peer dependencies
 
@@ -123,12 +159,14 @@ VS Code extension that provides commands for embedding schemas and generating op
 ### Modifying the embedding interface
 
 The `EmbeddingProvider` interface is in `packages/graphql-embedding-core/src/interfaces.ts`. Changes here affect:
+
 - `graphql-embedding` package (must update `LlamaEmbeddingProvider`)
 - Any user-implemented custom providers
 
 ### Adding tests
 
 Tests go in `__tests__/` directories within each package:
+
 ```
 packages/graphql-embedding-parser/__tests__/parser.test.ts
 packages/graphql-embedding-core/__tests__/service.test.ts
@@ -158,23 +196,24 @@ npm run package --workspace=graphql-workbench
 
 ## File Patterns
 
-| Pattern | Purpose |
-|---------|---------|
-| `packages/*/src/index.ts` | Package entry points |
-| `packages/*/src/interfaces.ts` | Type definitions |
-| `packages/*/tsconfig.json` | Package-specific TypeScript config |
-| `packages/*/package.json` | Package manifest with dependencies |
-| `tsconfig.base.json` | Shared compiler options |
-| `tsconfig.json` | Project references for build order |
-| `packages/graphql-workbench/src/extension.ts` | VS Code extension entry |
-| `packages/graphql-workbench/src/commands/*.ts` | VS Code command handlers |
-| `packages/graphql-workbench/esbuild.config.mjs` | VS Code extension bundler config |
+| Pattern                                         | Purpose                            |
+| ----------------------------------------------- | ---------------------------------- |
+| `packages/*/src/index.ts`                       | Package entry points               |
+| `packages/*/src/interfaces.ts`                  | Type definitions                   |
+| `packages/*/tsconfig.json`                      | Package-specific TypeScript config |
+| `packages/*/package.json`                       | Package manifest with dependencies |
+| `tsconfig.base.json`                            | Shared compiler options            |
+| `tsconfig.json`                                 | Project references for build order |
+| `packages/graphql-workbench/src/extension.ts`   | VS Code extension entry            |
+| `packages/graphql-workbench/src/commands/*.ts`  | VS Code command handlers           |
+| `packages/graphql-workbench/esbuild.config.mjs` | VS Code extension bundler config   |
 
 ## Important Conventions
 
 ### Imports between packages
 
 Use package names, not relative paths:
+
 ```typescript
 // Correct
 import { EmbeddingDocument } from "graphql-embedding-parser";
@@ -195,6 +234,7 @@ TypeScript path mappings in each package's `tsconfig.json` resolve these to sour
 ### Exports
 
 All packages use explicit exports in `package.json`:
+
 ```json
 {
   "exports": {
@@ -210,6 +250,7 @@ All packages use explicit exports in `package.json`:
 ### Module format
 
 Packages use `NodeNext` module resolution and output ES modules. Use `.js` extensions in relative imports:
+
 ```typescript
 import { foo } from "./utils.js";
 ```
@@ -268,6 +309,7 @@ const results = await service.search("hello query");
 - Verify TypeScript path mappings if imports fail
 - Check that vector dimensions match between embedding provider and vector store
 - PGLite requires the `vector` extension to be loaded
+- Use "Run & Debug" panel in VS Code to debug vs code extension with the latest packages code locally is rebuilt and used.
 
 ## Do Not
 

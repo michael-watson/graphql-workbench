@@ -7,37 +7,64 @@ import {
 
 export async function generateOperationCommand(
   manager: EmbeddingManager,
-  extensionUri: vscode.Uri
+  extensionUri: vscode.Uri,
+  preselectedTableName?: string
 ): Promise<void> {
   try {
-    // Fetch available tables and let the user pick one
-    let tables: string[] = [];
-    try {
-      tables = await manager.listTables();
-    } catch {
-      // If listing fails (e.g. not yet initialized), fall through to manual entry
-    }
-
     let effectiveTableName: string;
 
-    if (tables.length > 0) {
-      const ENTER_CUSTOM = "Enter table name manually…";
-      const items = [
-        ...tables.map((t) => ({ label: t })),
-        { label: ENTER_CUSTOM },
-      ];
-
-      const picked = await vscode.window.showQuickPick(items, {
-        placeHolder: "Select an embedding table to query",
-      });
-
-      if (!picked) {
-        return; // User cancelled
+    if (preselectedTableName) {
+      // Use the preselected table name directly
+      effectiveTableName = preselectedTableName;
+    } else {
+      // Fetch available tables and let the user pick one
+      let tables: string[] = [];
+      try {
+        tables = await manager.listTables();
+      } catch {
+        // If listing fails (e.g. not yet initialized), fall through to manual entry
       }
 
-      if (picked.label === ENTER_CUSTOM) {
-        const custom = await vscode.window.showInputBox({
-          prompt: "Enter the embeddings table name",
+      if (tables.length > 0) {
+        const ENTER_CUSTOM = "Enter table name manually…";
+        const items = [
+          ...tables.map((t) => ({ label: t })),
+          { label: ENTER_CUSTOM },
+        ];
+
+        const picked = await vscode.window.showQuickPick(items, {
+          placeHolder: "Select an embedding table to query",
+        });
+
+        if (!picked) {
+          return; // User cancelled
+        }
+
+        if (picked.label === ENTER_CUSTOM) {
+          const custom = await vscode.window.showInputBox({
+            prompt: "Enter the embeddings table name",
+            placeHolder: manager.getDefaultTableName(),
+            value: manager.getDefaultTableName(),
+            validateInput: (value) => {
+              if (!value) {
+                return null;
+              }
+              if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(value)) {
+                return "Table name must start with a letter or underscore and contain only letters, numbers, and underscores";
+              }
+              return null;
+            },
+          });
+          if (custom === undefined) {
+            return;
+          }
+          effectiveTableName = custom || manager.getDefaultTableName();
+        } else {
+          effectiveTableName = picked.label;
+        }
+      } else {
+        const tableName = await vscode.window.showInputBox({
+          prompt: "Enter the embeddings table to query",
           placeHolder: manager.getDefaultTableName(),
           value: manager.getDefaultTableName(),
           validateInput: (value) => {
@@ -50,32 +77,11 @@ export async function generateOperationCommand(
             return null;
           },
         });
-        if (custom === undefined) {
+        if (tableName === undefined) {
           return;
         }
-        effectiveTableName = custom || manager.getDefaultTableName();
-      } else {
-        effectiveTableName = picked.label;
+        effectiveTableName = tableName || manager.getDefaultTableName();
       }
-    } else {
-      const tableName = await vscode.window.showInputBox({
-        prompt: "Enter the embeddings table to query",
-        placeHolder: manager.getDefaultTableName(),
-        value: manager.getDefaultTableName(),
-        validateInput: (value) => {
-          if (!value) {
-            return null;
-          }
-          if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(value)) {
-            return "Table name must start with a letter or underscore and contain only letters, numbers, and underscores";
-          }
-          return null;
-        },
-      });
-      if (tableName === undefined) {
-        return;
-      }
-      effectiveTableName = tableName || manager.getDefaultTableName();
     }
 
     // Prompt for natural language query
