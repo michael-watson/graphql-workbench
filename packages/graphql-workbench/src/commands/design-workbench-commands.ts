@@ -574,6 +574,43 @@ export async function embedDesignCommand(
   }
 
   try {
+    // Check if the table already exists
+    const existingTables = await embeddingManager.listTables();
+    const tableExists = existingTables.includes(tableName);
+
+    let action: "embed" | "use-existing" | "clear-and-embed" = "embed";
+
+    if (tableExists) {
+      // Table exists - ask user what to do
+      const choice = await vscode.window.showQuickPick(
+        [
+          {
+            label: "$(sync) Use Existing & Sync Changes",
+            description: "Keep existing embeddings and sync any schema changes",
+            action: "use-existing" as const,
+          },
+          {
+            label: "$(trash) Clear & Re-embed",
+            description: "Delete all existing embeddings and start fresh",
+            action: "clear-and-embed" as const,
+          },
+          {
+            label: "$(close) Cancel",
+            description: "Do nothing",
+            action: "cancel" as const,
+          },
+        ],
+        {
+          placeHolder: `Table "${tableName}" already exists. What would you like to do?`,
+        },
+      );
+
+      if (!choice || choice.action === "cancel") {
+        return;
+      }
+      action = choice.action;
+    }
+
     await vscode.window.withProgress(
       {
         location: vscode.ProgressLocation.Notification,
@@ -602,18 +639,42 @@ export async function embedDesignCommand(
           throw new Error("Schema is empty");
         }
 
-        progress.report({ message: `Embedding to table: ${tableName}...` });
-        const result = await embeddingManager.embedSchema(schemaSDL, tableName);
+        if (action === "clear-and-embed") {
+          progress.report({ message: "Clearing existing embeddings..." });
+          await embeddingManager.clearEmbeddings(tableName);
+          progress.report({ message: `Embedding to table: ${tableName}...` });
+          const result = await embeddingManager.embedSchema(schemaSDL, tableName);
+          vscode.window.showInformationMessage(
+            `Cleared and re-embedded ${result.embeddedCount} documents to table "${tableName}" in ${result.durationMs}ms.`,
+          );
+        } else if (action === "use-existing") {
+          progress.report({ message: "Syncing schema changes..." });
+          const result = await embeddingManager.embedSchemaIncremental(
+            schemaSDL,
+            tableName,
+          );
+          if (result.added === 0 && result.deleted === 0) {
+            vscode.window.showInformationMessage(
+              `Schema is up to date. No changes needed (${result.unchanged} documents).`,
+            );
+          } else {
+            vscode.window.showInformationMessage(
+              `Synced embeddings: ${result.added} added, ${result.deleted} removed, ${result.unchanged} unchanged (${result.durationMs}ms).`,
+            );
+          }
+        } else {
+          progress.report({ message: `Embedding to table: ${tableName}...` });
+          const result = await embeddingManager.embedSchema(schemaSDL, tableName);
+          vscode.window.showInformationMessage(
+            `Embedded ${result.embeddedCount} documents to table "${tableName}" in ${result.durationMs}ms.`,
+          );
+        }
 
         // Update the design's embedding status
         await designManager.setEmbeddingStatus(
           item.designPath,
           true,
           tableName,
-        );
-
-        vscode.window.showInformationMessage(
-          `Embedded ${result.embeddedCount} documents to table "${tableName}" in ${result.durationMs}ms.`,
         );
       },
     );

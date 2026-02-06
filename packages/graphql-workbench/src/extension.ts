@@ -477,7 +477,18 @@ export async function activate(
   const config = vscode.workspace.getConfiguration("graphqlWorkbench");
   if (config.get<boolean>("enableDesignWorkbench", true)) {
     designManager.startWatching();
-    designManager.discoverDesigns();
+    designManager.discoverDesigns().then(async () => {
+      // Try to restore embedding state from existing tables
+      // This helps recover state after VS Code restarts
+      try {
+        const existingTables = await embeddingManager!.listTables();
+        if (existingTables.length > 0) {
+          await designManager!.restoreEmbeddingStateFromTables(existingTables);
+        }
+      } catch {
+        // Ignore errors - embedding manager may not be initialized yet
+      }
+    });
   }
 
   console.log("GraphQL Workbench extension activated");
