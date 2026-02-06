@@ -170,6 +170,42 @@ export class DesignManager {
     }
   }
 
+  /**
+   * Check existing tables in the vector store and restore embedding state
+   * for designs whose expected table names match existing tables.
+   * This helps recover state after VS Code restarts.
+   */
+  async restoreEmbeddingStateFromTables(
+    existingTables: string[],
+  ): Promise<void> {
+    const tableSet = new Set(existingTables);
+    let restoredCount = 0;
+
+    for (const [configPath, design] of this.designs) {
+      // Skip if already marked as embedded
+      if (design.isEmbedded) {
+        continue;
+      }
+
+      // Check if the default table for this design exists
+      const defaultTableName = this.getDefaultTableName(configPath);
+      if (tableSet.has(defaultTableName)) {
+        this.log(
+          `Restoring embedding state for ${configPath}: found table "${defaultTableName}"`,
+        );
+        design.embeddingTableName = defaultTableName;
+        design.isEmbedded = true;
+        restoredCount++;
+      }
+    }
+
+    if (restoredCount > 0) {
+      await this.saveEmbeddingState();
+      this._onDidChangeDesigns.fire();
+      this.log(`Restored embedding state for ${restoredCount} design(s)`);
+    }
+  }
+
   async discoverDesigns(): Promise<void> {
     this.log("Discovering designs...");
 

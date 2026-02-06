@@ -398,32 +398,27 @@
         {
           "command": "graphql-workbench.openSchema",
           "when": "view == schema-design-workbench.designs && viewItem == schema-file",
-          "group": "navigation"
+          "group": "0_navigation"
         },
         {
           "command": "graphql-workbench.analyzeSchemaFromTree",
           "when": "view == schema-design-workbench.designs && viewItem == schema-file",
-          "group": "1_actions"
+          "group": "1_actions@1"
         },
         {
           "command": "graphql-workbench.lintSchemaFromTree",
           "when": "view == schema-design-workbench.designs && viewItem == schema-file",
-          "group": "1_actions"
+          "group": "1_actions@2"
         },
         {
           "command": "graphql-workbench.analyzeSchemaFromTree",
           "when": "view == schema-design-workbench.designs && viewItem == design-standalone",
-          "group": "1_actions"
+          "group": "1_actions@1"
         },
         {
           "command": "graphql-workbench.lintSchemaFromTree",
           "when": "view == schema-design-workbench.designs && viewItem == design-standalone",
-          "group": "1_actions"
-        },
-        {
-          "command": "graphql-workbench.deleteDesign",
-          "when": "view == schema-design-workbench.designs && viewItem =~ /^design-/",
-          "group": "2_danger"
+          "group": "1_actions@2"
         },
         {
           "command": "graphql-workbench.renameSubgraph",
@@ -431,24 +426,14 @@
           "group": "1_actions"
         },
         {
-          "command": "graphql-workbench.deleteSubgraph",
-          "when": "view == schema-design-workbench.designs && viewItem == subgraph",
-          "group": "2_danger"
-        },
-        {
           "command": "graphql-workbench.embedDesign",
           "when": "view == schema-design-workbench.designs && viewItem =~ /^design-/",
-          "group": "0_embedding@1"
+          "group": "2_embedding@1"
         },
         {
           "command": "graphql-workbench.generateOperationForDesign",
           "when": "view == schema-design-workbench.designs && viewItem =~ /^design-/",
-          "group": "0_embedding@2"
-        },
-        {
-          "command": "graphql-workbench.clearDesignEmbeddings",
-          "when": "view == schema-design-workbench.designs && viewItem =~ /^design-/",
-          "group": "0_embedding@3"
+          "group": "2_embedding@2"
         },
         {
           "command": "graphql-workbench.embedDesign",
@@ -462,7 +447,22 @@
         },
         {
           "command": "graphql-workbench.clearDesignEmbeddings",
+          "when": "view == schema-design-workbench.designs && viewItem =~ /^design-/",
+          "group": "3_danger@1"
+        },
+        {
+          "command": "graphql-workbench.deleteDesign",
+          "when": "view == schema-design-workbench.designs && viewItem =~ /^design-/",
+          "group": "3_danger@2"
+        },
+        {
+          "command": "graphql-workbench.clearDesignEmbeddings",
           "when": "view == schema-design-workbench.designs && viewItem == embedding-status",
+          "group": "2_danger"
+        },
+        {
+          "command": "graphql-workbench.deleteSubgraph",
+          "when": "view == schema-design-workbench.designs && viewItem == subgraph",
           "group": "2_danger"
         }
       ]
