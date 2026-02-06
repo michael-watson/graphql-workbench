@@ -73,3 +73,37 @@ No API key is needed.
 1. Set `graphqlWorkbench.llmProvider` to `"anthropic"`.
 2. Set `graphqlWorkbench.anthropicApiKey` to your API key.
 3. Optionally set `graphqlWorkbench.llmModel` (defaults to `claude-3-haiku`).
+
+## Schema Design Workbench
+
+These settings control the Schema Design Workbench activity bar panel.
+
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| `graphqlWorkbench.enableDesignWorkbench` | boolean | `true` | Show the Schema Design Workbench activity bar tab. Disable to hide the panel. |
+| `graphqlWorkbench.roverPath` | string | `"rover"` | Path to the Rover CLI executable for federated schema validation. Use the full path if `rover` is not in your system PATH. |
+| `graphqlWorkbench.validateOnSave` | boolean | `true` | Automatically validate schema designs when `.graphql` or `supergraph.yaml` files are saved. |
+
+### Rover CLI Setup
+
+The Schema Design Workbench uses the [Rover CLI](https://www.apollographql.com/docs/rover/) to validate and compose federated schemas.
+
+1. Install Rover:
+   ```bash
+   curl -sSL https://rover.apollo.dev/nix/latest | sh
+   ```
+   Or see the [Rover installation docs](https://www.apollographql.com/docs/rover/getting-started) for other methods.
+
+2. Verify installation:
+   ```bash
+   rover --version
+   ```
+
+3. If `rover` is not in your PATH, set the full path in settings:
+   ```json
+   {
+     "graphqlWorkbench.roverPath": "/usr/local/bin/rover"
+   }
+   ```
+
+Rover is only required for federated schema validation. Standalone schemas use the built-in `graphql` library.

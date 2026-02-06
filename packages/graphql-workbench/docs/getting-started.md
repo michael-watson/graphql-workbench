@@ -8,6 +8,10 @@
   - [Ollama](https://ollama.com) running locally (default)
   - An OpenAI API key
   - An Anthropic API key
+- **Rover CLI** (optional) -- required for federated schema validation. Install with:
+  ```bash
+  curl -sSL https://rover.apollo.dev/nix/latest | sh
+  ```
 
 ## Installation
 
@@ -26,14 +30,35 @@ The extension activates automatically when you open a `.graphql` file or when yo
 
 ## Quick Start
 
+### Using the Schema Design Workbench
+
+The easiest way to get started is with the Schema Design Workbench:
+
+1. Click the **GraphQL Workbench** icon in the VS Code activity bar (left sidebar).
+2. The extension automatically discovers your `.graphql` files and `supergraph.yaml` configurations.
+3. Click a design to expand it and see its types, or right-click to access actions like validation and embedding.
+
+For federated designs, the workbench uses the Rover CLI to validate and compose schemas. Install it with:
+
+```bash
+curl -sSL https://rover.apollo.dev/nix/latest | sh
+```
+
 ### 1. Embed a Schema
 
 Before you can generate operations or analyze your schema, you need to embed it into a vector store.
 
-- **From a file**: Open a `.graphql` schema file, then run **GraphQL Workbench: Embed Schema from File** from the Command Palette.
-- **From an endpoint**: Run **GraphQL Workbench: Embed Schema from Endpoint** and enter your GraphQL API URL.
+**From the Workbench:**
+- Right-click any design in the Schema Design Workbench and select **Embed Schema**.
+- Or click the "Embedding" row (when it shows "not embedded") to start embedding.
 
-Both commands will prompt you for a table name. The default (`graphql_embeddings`) works for most cases. If the table already has data, you can choose to clear it or append to it.
+**From a file:**
+- Open a `.graphql` schema file, then run **GraphQL Workbench: Embed Schema from File** from the Command Palette.
+
+**From an endpoint:**
+- Run **GraphQL Workbench: Embed Schema from Endpoint** and enter your GraphQL API URL.
+
+All methods prompt you for a table name. The default (`graphql_embeddings` or `{designName}_embeddings`) works for most cases.
 
 ### 2. Generate an Operation
 

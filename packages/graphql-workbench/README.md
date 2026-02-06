@@ -4,6 +4,7 @@ Embed GraphQL schemas and generate operations from natural language queries dire
 
 ## Features
 
+- **Schema Design Workbench** -- Manage standalone and federated GraphQL designs from a dedicated activity bar with validation, embedding, and schema composition
 - **Schema Embedding** -- Parse and embed `.graphql` schemas from local files or live endpoints into a vector store
 - **Operation Generation** -- Generate GraphQL queries, mutations, and subscriptions from natural language using an LLM
 - **Explorer Panel** -- An integrated Apollo Explorer webview for running generated operations against a live endpoint
@@ -80,6 +81,74 @@ These settings control the LLM used for operation generation and schema design a
 | `graphqlWorkbench.minSimilarityScore` | `0.4` | 0--1 | Minimum cosine similarity score for vector search results. Lower values return more results but may include less relevant matches. |
 | `graphqlWorkbench.maxDocuments` | `50` | 1--200 | Maximum number of documents to retrieve from vector search. |
 | `graphqlWorkbench.maxValidationRetries` | `5` | 1--10 | Maximum attempts the LLM gets to fix an invalid generated operation. |
+
+## Schema Design Workbench
+
+The Schema Design Workbench provides a dedicated activity bar panel for managing GraphQL schema designs. It automatically discovers and organizes both standalone schemas and Apollo Federation supergraphs.
+
+### Opening the Workbench
+
+Click the GraphQL Workbench icon in the VS Code activity bar (left sidebar) to open the Designs panel.
+
+### Design Types
+
+The workbench supports two types of designs:
+
+| Type | Identified By | Description |
+|------|---------------|-------------|
+| **Standalone** | Any `.graphql` file with type definitions | A single schema file containing your entire GraphQL API |
+| **Federated** | A `supergraph.yaml` file | An Apollo Federation supergraph composed of multiple subgraph schemas |
+
+### Tree View Structure
+
+**Standalone designs** show:
+- Embedding status (click to embed if not embedded)
+- Schema types organized by category (Queries, Mutations, Types, etc.)
+- Click any type to navigate to its definition
+
+**Federated designs** show:
+- Embedding status
+- Federation version (click to navigate to the version in supergraph.yaml)
+- Supergraph Schema (click to view the composed supergraph with federation directives)
+- API Schema (click to view the client-facing schema without federation directives)
+- Each subgraph with its schema file
+
+### Validation
+
+Schemas are validated automatically on save (configurable via `graphqlWorkbench.validateOnSave`).
+
+- **Standalone schemas** are validated using the `graphql` library
+- **Federated schemas** are validated using the [Rover CLI](https://www.apollographql.com/docs/rover/) with `rover supergraph compose`
+
+Validation errors appear in the VS Code Problems panel with precise line/column locations. Click an error to navigate directly to the issue.
+
+### Embedding from the Workbench
+
+Right-click any design or its Embedding row to:
+- **Embed Schema** -- Parse and embed the schema into a vector store with a custom table name
+- **Re-embed Schema** -- Clear and re-embed the schema (useful after major changes)
+- **Clear Embeddings** -- Remove all embeddings for this design
+
+For federated designs, the API schema (without federation directives) is used for embedding.
+
+When embedded, the Embedding row shows the table name in green. Changes to embedded designs are automatically re-embedded incrementally (only changed documents are updated).
+
+### Context Menu Actions
+
+Right-click items in the tree for actions:
+
+| Item Type | Available Actions |
+|-----------|-------------------|
+| Design (standalone/federated) | Validate, Embed Schema, Generate Operation, Clear Embeddings, Delete |
+| Subgraph | Rename, Delete |
+| Schema file | Open, Analyze Design, Lint Schema |
+| Embedding row | Embed Schema, Re-embed Schema, Clear Embeddings |
+
+### Creating New Designs
+
+Use the toolbar buttons at the top of the Designs panel:
+- **+** (Add icon) -- Create a new standalone schema
+- **New Federated Design** (from the overflow menu) -- Create a federated design with a sample subgraph
 
 ## Usage
 
