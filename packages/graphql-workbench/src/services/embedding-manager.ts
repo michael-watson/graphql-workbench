@@ -41,6 +41,7 @@ async function loadCore() {
     EmbeddingService: core.EmbeddingService,
     PGLiteVectorStore: core.PGLiteVectorStore,
     PostgresVectorStore: core.PostgresVectorStore,
+    PineconeVectorStore: core.PineconeVectorStore,
     OllamaProvider: core.OllamaProvider,
     OllamaCloudProvider: core.OllamaCloudProvider,
     OpenAIProvider: core.OpenAIProvider,
@@ -128,7 +129,7 @@ type SchemaDesignReportResult = {
 };
 
 export interface StoreInfo {
-  type: "pglite" | "postgres";
+  type: "pglite" | "postgres" | "pinecone";
   location: string;
   tableName: string;
 }
@@ -136,6 +137,8 @@ export interface StoreInfo {
 interface InitializedConfig {
   vectorStore: string;
   postgresConnectionString: string;
+  pineconeApiKey: string;
+  pineconeIndexHost: string;
   modelPath: string;
   tableName: string;
 }
@@ -193,6 +196,8 @@ export class EmbeddingManager {
         "postgresConnectionString",
         "postgresql://postgres@localhost:5432/postgres"
       ),
+      pineconeApiKey: config.get<string>("pineconeApiKey", ""),
+      pineconeIndexHost: config.get<string>("pineconeIndexHost", ""),
       modelPath: config.get<string>("modelPath", ""),
       // LLM configuration
       llmProvider: config.get<string>("llmProvider", "ollama"),
@@ -443,7 +448,7 @@ export class EmbeddingManager {
 
         progress.report({ message: "Connecting to vector store..." });
 
-        const { EmbeddingService, PGLiteVectorStore, PostgresVectorStore } = await loadCore();
+        const { EmbeddingService, PGLiteVectorStore, PostgresVectorStore, PineconeVectorStore } = await loadCore();
 
         // Initialize vector store based on configuration
         if (config.vectorStore === "postgres") {
@@ -462,6 +467,25 @@ export class EmbeddingManager {
             tableName: this.currentTableName,
           };
           this.log(`Using PostgreSQL vector store: ${config.postgresConnectionString} (table: ${this.currentTableName})`);
+        } else if (config.vectorStore === "pinecone") {
+          if (!config.pineconeApiKey) {
+            throw new Error("Pinecone API key is required. Set it in graphqlWorkbench.pineconeApiKey");
+          }
+          if (!config.pineconeIndexHost) {
+            throw new Error("Pinecone index host is required. Set it in graphqlWorkbench.pineconeIndexHost");
+          }
+          this.vectorStore = new PineconeVectorStore({
+            apiKey: config.pineconeApiKey,
+            indexHost: config.pineconeIndexHost,
+            namespace: this.currentTableName,
+            dimensions: provider.dimensions,
+          });
+          this.storeInfo = {
+            type: "pinecone",
+            location: config.pineconeIndexHost,
+            tableName: this.currentTableName,
+          };
+          this.log(`Using Pinecone vector store: ${config.pineconeIndexHost} (namespace: ${this.currentTableName})`);
         } else {
           // Use PGLite with persistent storage in extension storage
           const { PGlite, vector } = await loadPGLite();
@@ -505,6 +529,8 @@ export class EmbeddingManager {
         this.initializedConfig = {
           vectorStore: config.vectorStore,
           postgresConnectionString: config.postgresConnectionString,
+          pineconeApiKey: config.pineconeApiKey,
+          pineconeIndexHost: config.pineconeIndexHost,
           modelPath: config.modelPath,
           tableName: this.currentTableName,
         };
@@ -522,6 +548,8 @@ export class EmbeddingManager {
     return (
       this.initializedConfig.vectorStore !== currentConfig.vectorStore ||
       this.initializedConfig.postgresConnectionString !== currentConfig.postgresConnectionString ||
+      this.initializedConfig.pineconeApiKey !== currentConfig.pineconeApiKey ||
+      this.initializedConfig.pineconeIndexHost !== currentConfig.pineconeIndexHost ||
       this.initializedConfig.modelPath !== currentConfig.modelPath ||
       this.initializedConfig.tableName !== effectiveTableName
     );

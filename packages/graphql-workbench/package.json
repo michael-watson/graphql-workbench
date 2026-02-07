@@ -2,7 +2,7 @@
   "name": "graphql-workbench",
   "displayName": "GraphQL Workbench",
   "description": "Embed GraphQL schemas and generate operations from natural language",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "publisher": "MichaelWatson",
   "icon": "images/workbench-icon.png",
   "engines": {
@@ -165,7 +165,8 @@
           "type": "string",
           "enum": [
             "pglite",
-            "postgres"
+            "postgres",
+            "pinecone"
           ],
           "default": "pglite",
           "description": "Vector store to use for embeddings"
@@ -174,6 +175,16 @@
           "type": "string",
           "default": "postgresql://postgres@localhost:5432/postgres",
           "description": "PostgreSQL connection string (when using postgres vector store)"
+        },
+        "graphqlWorkbench.pineconeApiKey": {
+          "type": "string",
+          "default": "",
+          "description": "Pinecone API key (required when using Pinecone vector store)"
+        },
+        "graphqlWorkbench.pineconeIndexHost": {
+          "type": "string",
+          "default": "",
+          "description": "Pinecone index host URL (e.g., https://my-index-abc123.svc.aped-1234.pinecone.io)"
         },
         "graphqlWorkbench.modelPath": {
           "type": "string",
