@@ -17,6 +17,8 @@ export { PGLiteVectorStore } from "./pglite-store.js";
 export type { PGLiteVectorStoreOptions } from "./pglite-store.js";
 export { PostgresVectorStore } from "./postgres-store.js";
 export type { PostgresVectorStoreOptions } from "./postgres-store.js";
+export { PineconeVectorStore } from "./pinecone-store.js";
+export type { PineconeVectorStoreOptions } from "./pinecone-store.js";
 
 export { chunkDocuments } from "graphql-embedding-parser";
 export type { EmbeddingDocument, DocumentType } from "graphql-embedding-parser";
