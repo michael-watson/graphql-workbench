@@ -53,6 +53,7 @@ Defines interfaces and provides vector store implementations.
 - `EmbeddingService` class - orchestrates embedding and storage
 - `PGLiteVectorStore` - in-memory/local vector store using PGLite
 - `PostgresVectorStore` - production vector store using PostgreSQL + pgvector
+- `PineconeVectorStore` - cloud vector store using Pinecone REST API (no SDK dependency)
 
 **When to modify:** New vector store implementations, changes to interfaces, embedding service logic.
 
@@ -149,6 +150,17 @@ VS Code extension that provides commands for embedding schemas and generating op
 
 3. Export from `packages/graphql-embedding-core/src/index.ts`
 4. Add any new dependencies to `packages/graphql-embedding-core/package.json` as peer dependencies
+5. Wire into the VS Code extension:
+   - Add the store type to the `graphqlWorkbench.vectorStore` enum in `packages/graphql-workbench/package.json`
+   - Add any required settings (API keys, hosts, etc.) to the same `configuration` section
+   - Update `StoreInfo`, `InitializedConfig`, `getConfig()`, `loadCore()`, `initialize()`, and `hasConfigChanged()` in `packages/graphql-workbench/src/services/embedding-manager.ts`
+
+**Pinecone-specific notes:** The `PineconeVectorStore` (`pinecone-store.ts`) uses the Pinecone REST API directly via `fetch` with no SDK. Key design decisions:
+
+- Pinecone namespaces map to the `tableName` concept used by PGLite/Postgres stores
+- Pinecone rejects all-zero vectors, so near-zero (`1e-7`) is used for sentinel records and exact-match lookups
+- `DocumentMetadata` fields used for filtering (`parentType`, `rootOperationType`, `isRootOperationField`, `kind`, `chunkIndex`, `totalChunks`) are promoted to top-level Pinecone metadata so Pinecone can filter on them; the full metadata object is also stored serialized in `metadata_json`
+- Schema SDL is stored on a sentinel record (`__schema_sdl__`) with the SDL in a `schema_sdl` metadata field
 
 ### Adding a new document type to the parser
 
@@ -196,17 +208,18 @@ npm run package --workspace=graphql-workbench
 
 ## File Patterns
 
-| Pattern                                         | Purpose                            |
-| ----------------------------------------------- | ---------------------------------- |
-| `packages/*/src/index.ts`                       | Package entry points               |
-| `packages/*/src/interfaces.ts`                  | Type definitions                   |
-| `packages/*/tsconfig.json`                      | Package-specific TypeScript config |
-| `packages/*/package.json`                       | Package manifest with dependencies |
-| `tsconfig.base.json`                            | Shared compiler options            |
-| `tsconfig.json`                                 | Project references for build order |
-| `packages/graphql-workbench/src/extension.ts`   | VS Code extension entry            |
-| `packages/graphql-workbench/src/commands/*.ts`  | VS Code command handlers           |
-| `packages/graphql-workbench/esbuild.config.mjs` | VS Code extension bundler config   |
+| Pattern                                          | Purpose                            |
+| ------------------------------------------------ | ---------------------------------- |
+| `packages/*/src/index.ts`                        | Package entry points               |
+| `packages/*/src/interfaces.ts`                   | Type definitions                   |
+| `packages/*/tsconfig.json`                       | Package-specific TypeScript config |
+| `packages/*/package.json`                        | Package manifest with dependencies |
+| `tsconfig.base.json`                             | Shared compiler options            |
+| `tsconfig.json`                                  | Project references for build order |
+| `packages/graphql-embedding-core/src/*-store.ts` | Vector store implementations       |
+| `packages/graphql-workbench/src/extension.ts`    | VS Code extension entry            |
+| `packages/graphql-workbench/src/commands/*.ts`   | VS Code command handlers           |
+| `packages/graphql-workbench/esbuild.config.mjs`  | VS Code extension bundler config   |
 
 ## Important Conventions
 
@@ -309,6 +322,8 @@ const results = await service.search("hello query");
 - Verify TypeScript path mappings if imports fail
 - Check that vector dimensions match between embedding provider and vector store
 - PGLite requires the `vector` extension to be loaded
+- Pinecone indexes must be pre-created with matching dimensions; the `PineconeVectorStore` does not create indexes
+- Pinecone index host URLs should include the `https://` scheme (auto-prepended if missing)
 - Use "Run & Debug" panel in VS Code to debug vs code extension with the latest packages code locally is rebuilt and used.
 
 ## Do Not

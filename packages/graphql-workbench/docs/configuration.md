@@ -6,8 +6,10 @@ All settings are under the `graphqlWorkbench` namespace. Open **Settings** (`Ctr
 
 | Setting | Type | Default | Description |
 |---------|------|---------|-------------|
-| `graphqlWorkbench.vectorStore` | `"pglite"` \| `"postgres"` | `"pglite"` | Which vector store backend to use. PGLite is embedded and requires no setup. PostgreSQL requires a running instance with `pgvector`. |
+| `graphqlWorkbench.vectorStore` | `"pglite"` \| `"postgres"` \| `"pinecone"` | `"pglite"` | Which vector store backend to use. PGLite is embedded and requires no setup. PostgreSQL requires a running instance with `pgvector`. Pinecone uses a cloud-hosted vector database. |
 | `graphqlWorkbench.postgresConnectionString` | string | `"postgresql://postgres@localhost:5432/postgres"` | Connection string for PostgreSQL. Only used when `vectorStore` is `"postgres"`. |
+| `graphqlWorkbench.pineconeApiKey` | string | `""` | Pinecone API key. Required when `vectorStore` is `"pinecone"`. |
+| `graphqlWorkbench.pineconeIndexHost` | string | `""` | Pinecone index host URL (e.g., `https://my-index-abc123.svc.aped-1234.pinecone.io`). Required when `vectorStore` is `"pinecone"`. The `https://` prefix is added automatically if omitted. |
 
 ## Embedding Model
 

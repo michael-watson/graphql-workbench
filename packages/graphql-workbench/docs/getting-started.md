@@ -79,14 +79,17 @@ Run **GraphQL Workbench: Lint Schema** on any `.graphql` file. Select which lint
 
 ## Vector Store Options
 
-The extension supports two vector store backends:
+The extension supports three vector store backends:
 
 | Backend | Description | Best for |
 |---------|-------------|----------|
 | **PGLite** (default) | Embedded database stored locally in VS Code's extension storage. No setup required. | Individual use, quick start |
 | **PostgreSQL** | Connects to an external PostgreSQL instance with `pgvector` installed. | Teams, shared environments, large schemas |
+| **Pinecone** | Cloud-hosted vector database via REST API. Requires a Pinecone account and a pre-created index. | Cloud-native workflows, managed infrastructure |
 
 Change the backend in **Settings > GraphQL Workbench > Vector Store**.
+
+For Pinecone, create a serverless index with dimensions matching your embedding model (768 for the default model) and the **cosine** metric, then set `pineconeApiKey` and `pineconeIndexHost` in settings.
 
 ## Next Steps
 

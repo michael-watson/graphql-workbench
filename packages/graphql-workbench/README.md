@@ -44,8 +44,10 @@ Configure the extension in VS Code Settings (`Cmd+,` / `Ctrl+,`). All settings a
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `graphqlWorkbench.vectorStore` | `"pglite"` | Vector store backend: `"pglite"` (embedded, no setup) or `"postgres"` (requires pgvector) |
+| `graphqlWorkbench.vectorStore` | `"pglite"` | Vector store backend: `"pglite"` (embedded, no setup), `"postgres"` (requires pgvector), or `"pinecone"` (Pinecone cloud) |
 | `graphqlWorkbench.postgresConnectionString` | `"postgresql://postgres@localhost:5432/postgres"` | PostgreSQL connection string (only used when `vectorStore` is `"postgres"`) |
+| `graphqlWorkbench.pineconeApiKey` | `""` | Pinecone API key (required when `vectorStore` is `"pinecone"`) |
+| `graphqlWorkbench.pineconeIndexHost` | `""` | Pinecone index host URL, e.g. `https://my-index-abc123.svc.aped-1234.pinecone.io` (required when `vectorStore` is `"pinecone"`) |
 
 ### Embedding Model
 
@@ -262,11 +264,29 @@ PGLite stores embeddings locally with no external dependencies. Data persists in
    }
    ```
 
+### Pinecone
+
+1. Create a [Pinecone](https://www.pinecone.io/) account and create a serverless index
+   - Set the index dimensions to match your embedding model (the default model uses 768 dimensions)
+   - Use the **cosine** distance metric
+2. Copy the index host URL from the Pinecone console
+3. Update settings:
+   ```json
+   {
+     "graphqlWorkbench.vectorStore": "pinecone",
+     "graphqlWorkbench.pineconeApiKey": "your-api-key",
+     "graphqlWorkbench.pineconeIndexHost": "https://my-index-abc123.svc.aped-1234.pinecone.io"
+   }
+   ```
+
+The Pinecone store uses namespaces to isolate different schemas (one namespace per embedding table name). No SDK is required -- the extension communicates directly with the Pinecone REST API.
+
 ## Requirements
 
 - VS Code 1.85.0 or later
 - An LLM provider for operation generation and schema design analysis (Ollama runs locally with no API key)
 - For PostgreSQL vector store: a PostgreSQL server with the pgvector extension
+- For Pinecone vector store: a Pinecone account with a pre-created index
 
 ## Notes
 
