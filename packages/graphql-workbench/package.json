@@ -186,6 +186,31 @@
           "default": "",
           "description": "Pinecone index host URL (e.g., https://my-index-abc123.svc.aped-1234.pinecone.io)"
         },
+        "graphqlWorkbench.remoteVectorStore": {
+          "type": "string",
+          "enum": [
+            "none",
+            "postgres",
+            "pinecone"
+          ],
+          "default": "none",
+          "description": "Connect to a remote vector store (read-only) for generating operations against a shared/production schema. The embedding model must match what was used to create the remote embeddings."
+        },
+        "graphqlWorkbench.remotePostgresConnectionString": {
+          "type": "string",
+          "default": "",
+          "description": "PostgreSQL connection string for the remote read-only vector store"
+        },
+        "graphqlWorkbench.remotePineconeApiKey": {
+          "type": "string",
+          "default": "",
+          "description": "Pinecone API key for the remote read-only vector store"
+        },
+        "graphqlWorkbench.remotePineconeIndexHost": {
+          "type": "string",
+          "default": "",
+          "description": "Pinecone index host URL for the remote read-only vector store"
+        },
         "graphqlWorkbench.modelPath": {
           "type": "string",
           "default": "",

@@ -163,6 +163,18 @@ export class EmbeddingManager {
   private initializedConfig: InitializedConfig | undefined;
   private currentTableName: string = DEFAULT_TABLE_NAME;
 
+  // Remote read-only store
+  private readOnlyStore: VectorStore | undefined;
+  private readOnlyDynamicGenerator: DynamicOperationGeneratorInstance | undefined;
+  private readOnlyPgPool: Pool | undefined;
+  private remoteInitialized = false;
+  private initializedRemoteConfig: {
+    remoteVectorStore: string;
+    remotePostgresConnectionString: string;
+    remotePineconeApiKey: string;
+    remotePineconeIndexHost: string;
+  } | undefined;
+
   constructor(context: vscode.ExtensionContext, outputChannel: vscode.OutputChannel) {
     this.context = context;
     this.outputChannel = outputChannel;
@@ -206,6 +218,11 @@ export class EmbeddingManager {
       ),
       pineconeApiKey: config.get<string>("pineconeApiKey", ""),
       pineconeIndexHost: config.get<string>("pineconeIndexHost", ""),
+      // Remote read-only store
+      remoteVectorStore: config.get<string>("remoteVectorStore", "none"),
+      remotePostgresConnectionString: config.get<string>("remotePostgresConnectionString", ""),
+      remotePineconeApiKey: config.get<string>("remotePineconeApiKey", ""),
+      remotePineconeIndexHost: config.get<string>("remotePineconeIndexHost", ""),
       modelPath: config.get<string>("modelPath", ""),
       // LLM configuration
       llmProvider: config.get<string>("llmProvider", "ollama"),
@@ -397,6 +414,95 @@ export class EmbeddingManager {
     );
   }
 
+  /**
+   * Ensure the embedding provider is loaded. Reuses existing instance if available.
+   */
+  private async ensureEmbeddingProvider(): Promise<void> {
+    if (this.embeddingProvider) {
+      return;
+    }
+
+    const resolvedModelPath = await this.ensureModelAvailable();
+    const { LlamaEmbeddingProvider } = await loadLlamaProvider();
+    const provider = new LlamaEmbeddingProvider({
+      modelPath: resolvedModelPath,
+    });
+    await provider.initialize();
+    this.embeddingProvider = provider;
+    this.log(`Embedding model loaded. Dimensions: ${provider.dimensions}`);
+  }
+
+  /**
+   * Ensure the LLM provider is initialized. Reuses existing instance if available.
+   */
+  private async ensureLLMProvider(): Promise<void> {
+    if (this.llmProvider) {
+      return;
+    }
+
+    const config = this.getConfig();
+    const { OllamaProvider, OllamaCloudProvider, OpenAIProvider, AnthropicProvider } = await loadCore();
+
+    this.log(`Initializing LLM provider: ${config.llmProvider}...`);
+
+    let llmProvider: LLMProviderInstance;
+
+    switch (config.llmProvider) {
+      case "openai":
+        if (!config.openaiApiKey) {
+          throw new Error("OpenAI API key is required. Set it in graphqlWorkbench.openaiApiKey");
+        }
+        llmProvider = new OpenAIProvider({
+          apiKey: config.openaiApiKey,
+          model: config.llmModel || undefined,
+          defaultTemperature: config.llmTemperature,
+          topP: config.llmTopP,
+        });
+        break;
+
+      case "anthropic":
+        if (!config.anthropicApiKey) {
+          throw new Error("Anthropic API key is required. Set it in graphqlWorkbench.anthropicApiKey");
+        }
+        llmProvider = new AnthropicProvider({
+          apiKey: config.anthropicApiKey,
+          model: config.llmModel || undefined,
+          defaultTemperature: config.llmTemperature,
+          topK: config.llmTopK,
+          topP: config.llmTopP,
+        });
+        break;
+
+      case "ollama-cloud":
+        if (!config.ollamaCloudApiKey) {
+          throw new Error("Ollama Cloud API key is required. Set it in graphqlWorkbench.ollamaCloudApiKey");
+        }
+        llmProvider = new OllamaCloudProvider({
+          apiKey: config.ollamaCloudApiKey,
+          model: config.llmModel || undefined,
+          defaultTemperature: config.llmTemperature,
+          topK: config.llmTopK,
+          topP: config.llmTopP,
+        });
+        break;
+
+      case "ollama":
+      default:
+        llmProvider = new OllamaProvider({
+          baseUrl: config.ollamaBaseUrl,
+          model: config.llmModel || undefined,
+          defaultTemperature: config.llmTemperature,
+          topK: config.llmTopK,
+          topP: config.llmTopP,
+        });
+        break;
+    }
+
+    await llmProvider.initialize();
+    this.llmProvider = llmProvider;
+    this.log(`LLM provider initialized: ${llmProvider.name} (model: ${llmProvider.model})`);
+  }
+
   getStoreInfo(): StoreInfo | undefined {
     return this.storeInfo;
   }
@@ -434,10 +540,8 @@ export class EmbeddingManager {
         progress.report({ message: "Loading embedding model..." });
         this.log("Loading embedding model...");
 
-        // Resolve model path: user-configured > cached > download
-        let resolvedModelPath: string;
         try {
-          resolvedModelPath = await this.ensureModelAvailable();
+          await this.ensureEmbeddingProvider();
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
           throw new Error(
@@ -445,14 +549,7 @@ export class EmbeddingManager {
           );
         }
 
-        // Initialize embedding provider
-        const { LlamaEmbeddingProvider } = await loadLlamaProvider();
-        const provider = new LlamaEmbeddingProvider({
-          modelPath: resolvedModelPath,
-        });
-        await provider.initialize();
-        this.embeddingProvider = provider;
-        this.log(`Embedding model loaded. Dimensions: ${provider.dimensions}`);
+        const provider = this.embeddingProvider!;
 
         progress.report({ message: "Connecting to vector store..." });
 
@@ -538,8 +635,8 @@ export class EmbeddingManager {
 
         // Initialize embedding service
         this.embeddingService = new EmbeddingService({
-          embeddingProvider: this.embeddingProvider,
-          vectorStore: this.vectorStore,
+          embeddingProvider: this.embeddingProvider!,
+          vectorStore: this.vectorStore!,
         });
         await this.embeddingService.initialize();
 
@@ -594,71 +691,12 @@ export class EmbeddingManager {
 
     try {
       const { DynamicOperationGenerator } = await loadOperation();
-      const { OllamaProvider, OllamaCloudProvider, OpenAIProvider, AnthropicProvider } = await loadCore();
 
-      this.log(`Initializing LLM provider: ${config.llmProvider}...`);
-
-      // Create LLM provider based on configuration
-      let llmProvider: LLMProviderInstance;
-
-      switch (config.llmProvider) {
-        case "openai":
-          if (!config.openaiApiKey) {
-            throw new Error("OpenAI API key is required. Set it in graphqlWorkbench.openaiApiKey");
-          }
-          llmProvider = new OpenAIProvider({
-            apiKey: config.openaiApiKey,
-            model: config.llmModel || undefined,
-            defaultTemperature: config.llmTemperature,
-            topP: config.llmTopP,
-          });
-          break;
-
-        case "anthropic":
-          if (!config.anthropicApiKey) {
-            throw new Error("Anthropic API key is required. Set it in graphqlWorkbench.anthropicApiKey");
-          }
-          llmProvider = new AnthropicProvider({
-            apiKey: config.anthropicApiKey,
-            model: config.llmModel || undefined,
-            defaultTemperature: config.llmTemperature,
-            topK: config.llmTopK,
-            topP: config.llmTopP,
-          });
-          break;
-
-        case "ollama-cloud":
-          if (!config.ollamaCloudApiKey) {
-            throw new Error("Ollama Cloud API key is required. Set it in graphqlWorkbench.ollamaCloudApiKey");
-          }
-          llmProvider = new OllamaCloudProvider({
-            apiKey: config.ollamaCloudApiKey,
-            model: config.llmModel || undefined,
-            defaultTemperature: config.llmTemperature,
-            topK: config.llmTopK,
-            topP: config.llmTopP,
-          });
-          break;
-
-        case "ollama":
-        default:
-          llmProvider = new OllamaProvider({
-            baseUrl: config.ollamaBaseUrl,
-            model: config.llmModel || undefined,
-            defaultTemperature: config.llmTemperature,
-            topK: config.llmTopK,
-            topP: config.llmTopP,
-          });
-          break;
-      }
-
-      await llmProvider.initialize();
-      this.llmProvider = llmProvider;
-      this.log(`LLM provider initialized: ${llmProvider.name} (model: ${llmProvider.model})`);
+      await this.ensureLLMProvider();
 
       // Create dynamic operation generator (without schema - validation will be parse-only)
       this.dynamicOperationGenerator = new DynamicOperationGenerator({
-        llmProvider: llmProvider as any,
+        llmProvider: this.llmProvider as any,
         vectorStore: this.vectorStore!,
         // Note: no schema provided, so validation will only check parse correctness
         minSimilarityScore: config.minSimilarityScore,
@@ -685,7 +723,6 @@ export class EmbeddingManager {
     const { buildSchema } = await loadGraphQL();
     const { parseSchema } = await loadParser();
     const { DynamicOperationGenerator } = await loadOperation();
-    const { OllamaProvider, OllamaCloudProvider, OpenAIProvider, AnthropicProvider } = await loadCore();
 
     this.log("Parsing GraphQL schema...");
     const parseStartTime = Date.now();
@@ -730,62 +767,11 @@ export class EmbeddingManager {
     // Initialize dynamic operation generator
     try {
       this.lastDynamicGeneratorInitError = undefined;
-      this.log(`Initializing LLM provider: ${config.llmProvider}...`);
-
-      // Create LLM provider based on configuration
-      let llmProvider: LLMProviderInstance;
-
-      switch (config.llmProvider) {
-        case "openai":
-          if (!config.openaiApiKey) {
-            throw new Error("OpenAI API key is required. Set it in graphqlWorkbench.openaiApiKey");
-          }
-          llmProvider = new OpenAIProvider({
-            apiKey: config.openaiApiKey,
-            model: config.llmModel || undefined,
-            defaultTemperature: config.llmTemperature,
-          });
-          break;
-
-        case "anthropic":
-          if (!config.anthropicApiKey) {
-            throw new Error("Anthropic API key is required. Set it in graphqlWorkbench.anthropicApiKey");
-          }
-          llmProvider = new AnthropicProvider({
-            apiKey: config.anthropicApiKey,
-            model: config.llmModel || undefined,
-            defaultTemperature: config.llmTemperature,
-          });
-          break;
-
-        case "ollama-cloud":
-          if (!config.ollamaCloudApiKey) {
-            throw new Error("Ollama Cloud API key is required. Set it in graphqlWorkbench.ollamaCloudApiKey");
-          }
-          llmProvider = new OllamaCloudProvider({
-            apiKey: config.ollamaCloudApiKey,
-            model: config.llmModel || undefined,
-            defaultTemperature: config.llmTemperature,
-          });
-          break;
-
-        case "ollama":
-        default:
-          llmProvider = new OllamaProvider({
-            baseUrl: config.ollamaBaseUrl,
-            model: config.llmModel || undefined,
-            defaultTemperature: config.llmTemperature,
-          });
-          break;
-      }
-
-      await llmProvider.initialize();
-      this.llmProvider = llmProvider;
-      this.log(`LLM provider initialized: ${llmProvider.name} (model: ${llmProvider.model})`);
+      await this.ensureLLMProvider();
 
       // Create dynamic operation generator with logger
       this.dynamicOperationGenerator = new DynamicOperationGenerator({
-        llmProvider: llmProvider as any,
+        llmProvider: this.llmProvider as any,
         vectorStore: this.vectorStore!,
         schema: this.schema,
         minSimilarityScore: config.minSimilarityScore,
@@ -940,7 +926,8 @@ export class EmbeddingManager {
 
   async generateOperation(
     query: string,
-    tableName?: string
+    tableName?: string,
+    options?: { useRemoteStore?: boolean }
   ): Promise<{
     operation: string;
     fields: string[];
@@ -949,6 +936,10 @@ export class EmbeddingManager {
     rootField?: string;
     validationAttempts?: number;
   } | undefined> {
+    if (options?.useRemoteStore) {
+      return this.generateOperationFromRemote(query, tableName);
+    }
+
     await this.ensureInitialized(tableName);
 
     // Check if generator needs to be initialized (e.g., after VS Code restart)
@@ -1179,6 +1170,222 @@ export class EmbeddingManager {
     }
   }
 
+  // ── Remote read-only store ──────────────────────────────────────────
+
+  private async initializeReadOnlyStore(): Promise<void> {
+    const config = this.getConfig();
+    if (config.remoteVectorStore === "none") {
+      return;
+    }
+
+    await this.ensureEmbeddingProvider();
+    const dimensions = this.embeddingProvider!.dimensions;
+    const { PostgresVectorStore, PineconeVectorStore } = await loadCore();
+
+    if (config.remoteVectorStore === "postgres") {
+      if (!config.remotePostgresConnectionString) {
+        throw new Error("Remote PostgreSQL connection string is required. Set it in graphqlWorkbench.remotePostgresConnectionString");
+      }
+      const { Pool } = await loadPg();
+      this.readOnlyPgPool = new Pool({
+        connectionString: config.remotePostgresConnectionString,
+      });
+      this.readOnlyStore = new PostgresVectorStore({
+        pool: this.readOnlyPgPool,
+        dimensions,
+        tableName: DEFAULT_TABLE_NAME,
+      });
+      try {
+        await this.readOnlyStore.initialize();
+      } catch (err) {
+        // Remote DB user may have read-only permissions; tables already exist
+        this.log(`Remote store initialize (non-fatal): ${err}`);
+      }
+      this.log(`Remote read-only Postgres store connected: ${config.remotePostgresConnectionString}`);
+    } else if (config.remoteVectorStore === "pinecone") {
+      if (!config.remotePineconeApiKey) {
+        throw new Error("Remote Pinecone API key is required. Set it in graphqlWorkbench.remotePineconeApiKey");
+      }
+      if (!config.remotePineconeIndexHost) {
+        throw new Error("Remote Pinecone index host is required. Set it in graphqlWorkbench.remotePineconeIndexHost");
+      }
+      this.readOnlyStore = new PineconeVectorStore({
+        apiKey: config.remotePineconeApiKey,
+        indexHost: config.remotePineconeIndexHost,
+        namespace: DEFAULT_TABLE_NAME,
+        dimensions,
+      });
+      await this.readOnlyStore.initialize();
+      this.log(`Remote read-only Pinecone store connected: ${config.remotePineconeIndexHost}`);
+    }
+
+    this.remoteInitialized = true;
+    this.initializedRemoteConfig = {
+      remoteVectorStore: config.remoteVectorStore,
+      remotePostgresConnectionString: config.remotePostgresConnectionString,
+      remotePineconeApiKey: config.remotePineconeApiKey,
+      remotePineconeIndexHost: config.remotePineconeIndexHost,
+    };
+  }
+
+  private hasRemoteConfigChanged(): boolean {
+    if (!this.initializedRemoteConfig) {
+      return false;
+    }
+    const c = this.getConfig();
+    return (
+      this.initializedRemoteConfig.remoteVectorStore !== c.remoteVectorStore ||
+      this.initializedRemoteConfig.remotePostgresConnectionString !== c.remotePostgresConnectionString ||
+      this.initializedRemoteConfig.remotePineconeApiKey !== c.remotePineconeApiKey ||
+      this.initializedRemoteConfig.remotePineconeIndexHost !== c.remotePineconeIndexHost
+    );
+  }
+
+  private async ensureReadOnlyStoreInitialized(): Promise<void> {
+    if (this.remoteInitialized && this.hasRemoteConfigChanged()) {
+      await this.disposeRemoteStore();
+    }
+    if (!this.remoteInitialized) {
+      await this.initializeReadOnlyStore();
+    }
+  }
+
+  async listRemoteTables(): Promise<string[]> {
+    const config = this.getConfig();
+    if (config.remoteVectorStore === "none") {
+      return [];
+    }
+    try {
+      await this.ensureReadOnlyStoreInitialized();
+      return this.readOnlyStore ? await this.readOnlyStore.listTables() : [];
+    } catch (error) {
+      this.log(`WARNING: Failed to list remote tables: ${error}`);
+      return [];
+    }
+  }
+
+  private async setRemoteStoreTable(tableName: string): Promise<void> {
+    const config = this.getConfig();
+    const dimensions = this.embeddingProvider!.dimensions;
+    const { PostgresVectorStore, PineconeVectorStore } = await loadCore();
+
+    // Close old store (but keep the pg pool for reuse)
+    if (this.readOnlyStore) {
+      try { await this.readOnlyStore.close(); } catch {}
+    }
+    this.readOnlyDynamicGenerator = undefined;
+
+    if (config.remoteVectorStore === "postgres") {
+      this.readOnlyStore = new PostgresVectorStore({
+        pool: this.readOnlyPgPool!,
+        dimensions,
+        tableName,
+      });
+      try {
+        await this.readOnlyStore.initialize();
+      } catch (err) {
+        this.log(`Remote store initialize for table "${tableName}" (non-fatal): ${err}`);
+      }
+    } else if (config.remoteVectorStore === "pinecone") {
+      this.readOnlyStore = new PineconeVectorStore({
+        apiKey: config.remotePineconeApiKey,
+        indexHost: config.remotePineconeIndexHost,
+        namespace: tableName,
+        dimensions,
+      });
+      await this.readOnlyStore.initialize();
+    }
+    this.log(`Remote store switched to table/namespace: ${tableName}`);
+  }
+
+  private async initializeRemoteDynamicGenerator(): Promise<void> {
+    const config = this.getConfig();
+    const { DynamicOperationGenerator } = await loadOperation();
+
+    await this.ensureLLMProvider();
+
+    this.readOnlyDynamicGenerator = new DynamicOperationGenerator({
+      llmProvider: this.llmProvider as any,
+      vectorStore: this.readOnlyStore!,
+      minSimilarityScore: config.minSimilarityScore,
+      maxDocuments: config.maxDocuments,
+      maxTypeDepth: 5,
+      maxValidationRetries: config.maxValidationRetries,
+      logger: {
+        log: (message: string) => this.log(message),
+      },
+    });
+    this.log("Remote dynamic operation generator initialized");
+  }
+
+  private async generateOperationFromRemote(
+    query: string,
+    tableName?: string
+  ): Promise<{
+    operation: string;
+    fields: string[];
+    variables?: Record<string, unknown>;
+    operationType?: string;
+    rootField?: string;
+    validationAttempts?: number;
+  } | undefined> {
+    await this.ensureReadOnlyStoreInitialized();
+    await this.ensureEmbeddingProvider();
+
+    if (!this.readOnlyStore) {
+      vscode.window.showWarningMessage("Remote vector store is not configured.");
+      return undefined;
+    }
+
+    if (tableName) {
+      await this.setRemoteStoreTable(tableName);
+    }
+
+    if (!this.readOnlyDynamicGenerator) {
+      await this.initializeRemoteDynamicGenerator();
+    }
+
+    const config = this.getConfig();
+    this.log(`Generating operation from remote store for: "${query}"`);
+
+    const inputVector = await this.embeddingProvider!.embed(query);
+
+    const result = await this.readOnlyDynamicGenerator!.generateDynamicOperation(
+      { inputVector, inputText: query },
+      {
+        minSimilarityScore: config.minSimilarityScore,
+        maxDocuments: config.maxDocuments,
+        maxValidationRetries: config.maxValidationRetries,
+      }
+    );
+
+    this.log(`Generated ${result.operationType} operation for field: ${result.rootField} (remote)`);
+    this.log(`Validation attempts: ${result.validationAttempts}`);
+
+    return {
+      operation: result.operation,
+      fields: [result.rootField],
+      variables: result.variables,
+      operationType: result.operationType,
+      rootField: result.rootField,
+      validationAttempts: result.validationAttempts,
+    };
+  }
+
+  private async disposeRemoteStore(): Promise<void> {
+    if (this.readOnlyStore) {
+      try { await this.readOnlyStore.close(); } catch {}
+    }
+    if (this.readOnlyPgPool) {
+      try { await this.readOnlyPgPool.end(); } catch {}
+    }
+    this.readOnlyStore = undefined;
+    this.readOnlyDynamicGenerator = undefined;
+    this.readOnlyPgPool = undefined;
+    this.remoteInitialized = false;
+    this.initializedRemoteConfig = undefined;
+  }
+
   async dispose(): Promise<void> {
     // Note: embeddingService.close() calls vectorStore.close() which handles
     // closing the pg pool or pglite instance, so we don't close them directly
@@ -1191,6 +1398,7 @@ export class EmbeddingManager {
     if (this.llmProvider) {
       await this.llmProvider.dispose();
     }
+    await this.disposeRemoteStore();
     this.initialized = false;
     this.embeddingService = undefined;
     this.embeddingProvider = undefined;

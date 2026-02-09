@@ -12,23 +12,31 @@ export async function generateOperationCommand(
 ): Promise<void> {
   try {
     let effectiveTableName: string;
+    let isRemoteTable = false;
 
     if (preselectedTableName) {
-      // Use the preselected table name directly
+      // Use the preselected table name directly (always local — design workbench path)
       effectiveTableName = preselectedTableName;
     } else {
-      // Fetch available tables and let the user pick one
-      let tables: string[] = [];
+      // Fetch available tables from local and remote stores in parallel
+      let localTables: string[] = [];
+      let remoteTables: string[] = [];
       try {
-        tables = await manager.listTables();
+        [localTables, remoteTables] = await Promise.all([
+          manager.listTables().catch(() => [] as string[]),
+          manager.listRemoteTables().catch(() => [] as string[]),
+        ]);
       } catch {
-        // If listing fails (e.g. not yet initialized), fall through to manual entry
+        // If both fail, fall through to manual entry
       }
 
-      if (tables.length > 0) {
+      const hasAnyTables = localTables.length > 0 || remoteTables.length > 0;
+
+      if (hasAnyTables) {
         const ENTER_CUSTOM = "Enter table name manually…";
-        const items = [
-          ...tables.map((t) => ({ label: t })),
+        const items: vscode.QuickPickItem[] = [
+          ...localTables.map((t) => ({ label: t, description: "Local" })),
+          ...remoteTables.map((t) => ({ label: t, description: "Remote (read-only)" })),
           { label: ENTER_CUSTOM },
         ];
 
@@ -61,6 +69,7 @@ export async function generateOperationCommand(
           effectiveTableName = custom || manager.getDefaultTableName();
         } else {
           effectiveTableName = picked.label;
+          isRemoteTable = picked.description === "Remote (read-only)";
         }
       } else {
         const tableName = await vscode.window.showInputBox({
@@ -110,7 +119,11 @@ export async function generateOperationCommand(
       async (progress) => {
         progress.report({ message: `Searching embedded schema in table "${effectiveTableName}"...` });
 
-        const result = await manager.generateOperation(query, effectiveTableName);
+        const result = await manager.generateOperation(
+          query,
+          effectiveTableName,
+          isRemoteTable ? { useRemoteStore: true } : undefined
+        );
 
         if (!result) {
           return;
