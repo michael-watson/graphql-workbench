@@ -1,7 +1,10 @@
 import * as vscode from "vscode";
+import * as path from "path";
 import { EmbeddingManager } from "./services/embedding-manager";
 import { DesignManager } from "./services/design-manager";
 import { DesignTreeProvider } from "./providers/design-tree-provider";
+import { EntityStore } from "./services/entity-store";
+import { FederationCompletionProvider } from "./providers/federation-completion-provider";
 import { embedFileCommand } from "./commands/embed-file";
 import { embedEndpointCommand } from "./commands/embed-endpoint";
 import { generateOperationCommand } from "./commands/generate-operation";
@@ -38,6 +41,7 @@ import type { DesignTreeItem } from "./providers/design-tree-items";
 let embeddingManager: EmbeddingManager | undefined;
 let designManager: DesignManager | undefined;
 let outputChannel: vscode.OutputChannel | undefined;
+let entityStore: EntityStore | undefined;
 
 export async function activate(
   context: vscode.ExtensionContext
@@ -473,22 +477,50 @@ export async function activate(
     },
   });
 
-  // Start design workbench
+  // --- Federation Entity Completion ---
+  // Initialize shared PGLite and entity store, then start design workbench.
+  // Both are done sequentially so the entity store is ready when designs are discovered.
+
   const config = vscode.workspace.getConfiguration("graphqlWorkbench");
   if (config.get<boolean>("enableDesignWorkbench", true)) {
     designManager.startWatching();
-    designManager.discoverDesigns().then(async () => {
-      // Try to restore embedding state from existing tables
-      // This helps recover state after VS Code restarts
-      try {
-        const existingTables = await embeddingManager!.listTables();
-        if (existingTables.length > 0) {
-          await designManager!.restoreEmbeddingStateFromTables(existingTables);
+
+    // Initialize entity store (PGLite + completion provider) then discover designs
+    initializeEntityStore(context, outputChannel, designManager, embeddingManager)
+      .then(async () => {
+        await designManager!.discoverDesigns();
+
+        // Try to restore embedding state from existing tables
+        try {
+          const existingTables = await embeddingManager!.listTables();
+          if (existingTables.length > 0) {
+            await designManager!.restoreEmbeddingStateFromTables(existingTables);
+          }
+        } catch {
+          // Ignore errors - embedding manager may not be initialized yet
         }
-      } catch {
-        // Ignore errors - embedding manager may not be initialized yet
-      }
-    });
+
+        // Rebuild entity data for all federated designs
+        await rebuildAllEntityData(outputChannel!);
+      })
+      .catch((err) => {
+        outputChannel?.appendLine(
+          `[EntityStore] Init failed, falling back to design discovery without entity completion: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+        // Still discover designs even if entity store fails
+        designManager!.discoverDesigns().then(async () => {
+          try {
+            const existingTables = await embeddingManager!.listTables();
+            if (existingTables.length > 0) {
+              await designManager!.restoreEmbeddingStateFromTables(existingTables);
+            }
+          } catch {
+            // Ignore errors
+          }
+        });
+      });
   }
 
   console.log("GraphQL Workbench extension activated");
@@ -502,5 +534,107 @@ export async function deactivate(): Promise<void> {
   if (designManager) {
     designManager.dispose();
     designManager = undefined;
+  }
+  entityStore = undefined;
+}
+
+async function initializeEntityStore(
+  context: vscode.ExtensionContext,
+  output: vscode.OutputChannel,
+  dm: DesignManager,
+  em: EmbeddingManager,
+): Promise<void> {
+  const { PGlite } = await import("@electric-sql/pglite");
+  const { vector } = await import("@electric-sql/pglite/vector");
+
+  const dbPath = path.join(
+    context.globalStorageUri.fsPath,
+    "embeddings.db",
+  );
+  await vscode.workspace.fs.createDirectory(context.globalStorageUri);
+
+  const pglite = new PGlite(dbPath, { extensions: { vector } });
+
+  // Share PGLite instance with embedding manager
+  em.setPGLiteInstance(pglite);
+
+  entityStore = new EntityStore(pglite);
+  await entityStore.initialize();
+
+  output.appendLine("[EntityStore] Initialized");
+
+  // Register completion provider
+  const completionProvider = vscode.languages.registerCompletionItemProvider(
+    [{ language: "graphql" }, { pattern: "**/*.graphql" }],
+    new FederationCompletionProvider(dm, entityStore),
+  );
+  context.subscriptions.push(completionProvider);
+
+  // Rebuild entity data when designs change
+  const designChangeListener = dm.onDidChangeDesigns(async () => {
+    await rebuildAllEntityData(output);
+  });
+  context.subscriptions.push(designChangeListener);
+}
+
+async function rebuildAllEntityData(
+  output: vscode.OutputChannel,
+): Promise<void> {
+  if (!entityStore || !designManager) {
+    return;
+  }
+
+  const { extractEntities, extractConnectEntities } = await import(
+    "./services/entity-extractor.js"
+  );
+  const { composeSupergraphSchema } = await import(
+    "./services/rover-validator.js"
+  );
+
+  for (const design of designManager.getDesigns()) {
+    if (design.type !== "federated" || !design.subgraphs) {
+      continue;
+    }
+
+    try {
+      let entities: import("./services/entity-extractor").EntityInfo[] = [];
+
+      // Extract entities from composed supergraph (@join__type with key)
+      const result = await composeSupergraphSchema(design.configPath, {
+        log: (msg) => output.appendLine(`[EntityStore] ${msg}`),
+      });
+
+      if (result.success && result.schema) {
+        entities = await extractEntities(result.schema);
+      } else {
+        output.appendLine(
+          `[EntityStore] Composition failed for ${design.configPath}, checking subgraph files only`,
+        );
+      }
+
+      // Extract connect entities from each subgraph file (@connect with entity: true)
+      for (const sub of design.subgraphs) {
+        try {
+          const uri = vscode.Uri.file(sub.schemaPath);
+          const content = await vscode.workspace.fs.readFile(uri);
+          const sdl = Buffer.from(content).toString("utf-8");
+          const connectEntities = await extractConnectEntities(sdl, sub.name);
+          entities.push(...connectEntities);
+        } catch {
+          // Skip unreadable subgraph files
+        }
+      }
+
+      await entityStore.replaceEntities(design.configPath, entities);
+      output.appendLine(
+        `[EntityStore] Stored ${entities.length} entities for ${design.configPath}`,
+      );
+    } catch (err) {
+      output.appendLine(
+        `[EntityStore] Error processing ${design.configPath}: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    }
   }
 }

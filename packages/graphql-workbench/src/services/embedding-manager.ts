@@ -168,6 +168,14 @@ export class EmbeddingManager {
     this.outputChannel = outputChannel;
   }
 
+  /**
+   * Set a shared PGLite instance (created externally, e.g. in extension.ts).
+   * When set, the embedding manager reuses this instance instead of creating its own.
+   */
+  setPGLiteInstance(pglite: unknown): void {
+    this.pglite = pglite;
+  }
+
   private log(message: string): void {
     const timestamp = new Date().toISOString();
     this.outputChannel.appendLine(`[${timestamp}] ${message}`);
@@ -488,32 +496,42 @@ export class EmbeddingManager {
           this.log(`Using Pinecone vector store: ${config.pineconeIndexHost} (namespace: ${this.currentTableName})`);
         } else {
           // Use PGLite with persistent storage in extension storage
-          const { PGlite, vector } = await loadPGLite();
+          let pgliteInstance: any;
+          if (this.pglite) {
+            // Reuse shared PGLite instance set via setPGLiteInstance()
+            pgliteInstance = this.pglite;
+          } else {
+            const { PGlite, vector } = await loadPGLite();
 
-          const dbPath = path.join(
-            this.context.globalStorageUri.fsPath,
-            "embeddings.db"
-          );
-          await vscode.workspace.fs.createDirectory(
-            this.context.globalStorageUri
-          );
+            const dbPath = path.join(
+              this.context.globalStorageUri.fsPath,
+              "embeddings.db"
+            );
+            await vscode.workspace.fs.createDirectory(
+              this.context.globalStorageUri
+            );
 
-          const pgliteInstance = new PGlite(dbPath, {
-            extensions: { vector },
-          });
-          this.pglite = pgliteInstance;
+            pgliteInstance = new PGlite(dbPath, {
+              extensions: { vector },
+            });
+            this.pglite = pgliteInstance;
+          }
 
           this.vectorStore = new PGLiteVectorStore({
             client: pgliteInstance,
             dimensions: provider.dimensions,
             tableName: this.currentTableName,
           });
+          const pgliteLocation = path.join(
+            this.context.globalStorageUri.fsPath,
+            "embeddings.db"
+          );
           this.storeInfo = {
             type: "pglite",
-            location: dbPath,
+            location: pgliteLocation,
             tableName: this.currentTableName,
           };
-          this.log(`Using PGLite vector store: ${dbPath} (table: ${this.currentTableName})`);
+          this.log(`Using PGLite vector store: ${pgliteLocation} (table: ${this.currentTableName})`);
         }
 
         progress.report({ message: "Initializing embedding service..." });

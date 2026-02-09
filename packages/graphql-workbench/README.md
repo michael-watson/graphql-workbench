@@ -5,6 +5,7 @@ Embed GraphQL schemas and generate operations from natural language queries dire
 ## Features
 
 - **Schema Design Workbench** -- Manage standalone and federated GraphQL designs from a dedicated activity bar with validation, embedding, and schema composition
+- **Federation Entity Completion** -- Autocomplete entity references from other subgraphs when editing federated schemas, with correct `@key` fields and type stubs
 - **Schema Embedding** -- Parse and embed `.graphql` schemas from local files or live endpoints into a vector store
 - **Operation Generation** -- Generate GraphQL queries, mutations, and subscriptions from natural language using an LLM
 - **Explorer Panel** -- An integrated Apollo Explorer webview for running generated operations against a live endpoint
@@ -151,6 +152,42 @@ Right-click items in the tree for actions:
 Use the toolbar buttons at the top of the Designs panel:
 - **+** (Add icon) -- Create a new standalone schema
 - **New Federated Design** (from the overflow menu) -- Create a federated design with a sample subgraph
+
+## Federation Entity Completion
+
+When editing a subgraph `.graphql` file within a federated design, the extension provides autocomplete suggestions for entity references from other subgraphs. This mirrors the entity completion behavior from the original Apollo Workbench extension.
+
+### How It Works
+
+1. The extension composes the supergraph using `rover supergraph compose` and extracts entity definitions from `@join__type` directives.
+2. It also scans each subgraph file for `@connect(entity: true)` directives, which declare entities via Apollo Connectors.
+3. When you trigger autocomplete (Ctrl+Space) on an empty line in a subgraph schema file, entities defined in other subgraphs are suggested.
+
+### What Gets Inserted
+
+Selecting an entity completion inserts a type stub with the correct `@key` directive and only the fields required to satisfy the key:
+
+```graphql
+type Product @key(fields: "id") {
+  id: ID!
+
+}
+```
+
+The cursor is placed inside the type body so you can immediately add extension fields.
+
+### Filtering
+
+- Entities already defined in the current subgraph are not suggested.
+- If an entity with the same type name and key fields already exists in the file, it is filtered out.
+- Entities with different `@key` fields are shown as separate completions (e.g., `Product` with `@key(fields: "id")` and `@key(fields: "sku")` appear as two items).
+- Each unique combination of type name and key fields appears only once, regardless of how many subgraphs define it.
+
+### Requirements
+
+- The file must belong to a federated design (referenced by a `supergraph.yaml`).
+- The Rover CLI must be available for supergraph composition.
+- The workbench automatically rebuilds entity data when designs are discovered or modified.
 
 ## Usage
 
