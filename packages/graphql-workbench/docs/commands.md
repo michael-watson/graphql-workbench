@@ -370,6 +370,45 @@ Removes a subgraph from the federated design.
 
 ---
 
+## Federation Entity Completion (Automatic)
+
+**Trigger:** Ctrl+Space (or your configured suggest keybinding) on an empty line in a subgraph `.graphql` file
+
+This is not a command but an automatic completion provider. When editing a subgraph schema file that belongs to a federated design, the extension suggests entity type stubs from other subgraphs.
+
+### How It Works
+
+1. The extension identifies which federated design and subgraph the current file belongs to.
+2. It queries stored entity data for entities defined in other subgraphs (extracted from the composed supergraph's `@join__type` directives and from `@connect(entity: true)` directives in subgraph files).
+3. Completions are shown as `Struct` items with the entity type name as the label and key field details in the description.
+
+### Inserted Stub
+
+Selecting a completion inserts a type stub containing only the `@key` directive and the fields needed to satisfy it:
+
+```graphql
+type Product @key(fields: "id") {
+  id: ID!
+
+}
+```
+
+### Filtering Rules
+
+- Entities owned by the current subgraph are excluded.
+- Entities whose type name and key fields already appear in the file are excluded.
+- Each unique (type name, key fields) combination appears only once, even if multiple subgraphs define it.
+- Only triggers on empty lines (not mid-type or mid-field).
+
+### Data Refresh
+
+Entity data is rebuilt automatically when:
+- Designs are discovered on activation
+- A `supergraph.yaml` or subgraph `.graphql` file is created, deleted, or modified
+- The design list changes for any reason
+
+---
+
 ## Delete Design
 
 **Context menu:** Right-click a design

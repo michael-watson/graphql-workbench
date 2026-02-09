@@ -44,6 +44,8 @@ For federated designs, the workbench uses the Rover CLI to validate and compose 
 curl -sSL https://rover.apollo.dev/nix/latest | sh
 ```
 
+When editing subgraph schemas in a federated design, the extension automatically suggests entity references from other subgraphs via autocomplete (Ctrl+Space). Each suggestion inserts a type stub with the correct `@key` fields. See the [Commands Reference](./commands.md#federation-entity-completion-automatic) for details.
+
 ### 1. Embed a Schema
 
 Before you can generate operations or analyze your schema, you need to embed it into a vector store.
