@@ -104,7 +104,7 @@ export async function validateFederatedSchema(
         "--format",
         "json",
       ],
-      { cwd, timeout: 30000, env: getAugmentedEnv() },
+      { cwd, timeout: 30000, maxBuffer: 10 * 1024 * 1024, env: getAugmentedEnv() },
       (error, stdout, stderr) => {
         const errors: ValidationError[] = [];
 
