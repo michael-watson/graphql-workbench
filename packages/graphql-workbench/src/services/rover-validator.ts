@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import * as path from "path";
 import * as fs from "fs";
+import * as os from "os";
 import { execFile } from "child_process";
 
 import type { ValidationError, ValidationResult } from "./schema-validator";
@@ -21,13 +22,30 @@ function getRoverPath(): string {
   return config.get<string>("roverPath", "rover");
 }
 
+/**
+ * Build an augmented PATH that includes common CLI install locations.
+ * On macOS, VS Code extensions inherit a very limited PATH that excludes
+ * directories like ~/.rover/bin, /opt/homebrew/bin, and /usr/local/bin.
+ */
+function getAugmentedEnv(): NodeJS.ProcessEnv {
+  const home = os.homedir();
+  const extraPaths = [
+    path.join(home, ".rover", "bin"),
+    "/opt/homebrew/bin",
+    "/usr/local/bin",
+  ];
+  const currentPath = process.env.PATH || "";
+  const augmentedPath = [...extraPaths, currentPath].join(path.delimiter);
+  return { ...process.env, PATH: augmentedPath };
+}
+
 export async function isRoverAvailable(): Promise<boolean> {
   if (roverAvailable !== undefined) {
     return roverAvailable;
   }
   const roverPath = getRoverPath();
   return new Promise<boolean>((resolve) => {
-    execFile(roverPath, ["--version"], { timeout: 10000 }, (error, _stdout) => {
+    execFile(roverPath, ["--version"], { timeout: 10000, env: getAugmentedEnv() }, (error, _stdout) => {
       roverAvailable = !error;
       resolve(roverAvailable);
     });
@@ -86,7 +104,7 @@ export async function validateFederatedSchema(
         "--format",
         "json",
       ],
-      { cwd, timeout: 30000 },
+      { cwd, timeout: 30000, env: getAugmentedEnv() },
       (error, stdout, stderr) => {
         const errors: ValidationError[] = [];
 
@@ -653,7 +671,7 @@ export async function composeSupergraphSchema(
     execFile(
       roverPath,
       ["supergraph", "compose", "--config", supergraphYamlPath],
-      { cwd, timeout: 30000, maxBuffer: 10 * 1024 * 1024 },
+      { cwd, timeout: 30000, maxBuffer: 10 * 1024 * 1024, env: getAugmentedEnv() },
       (error, stdout, stderr) => {
         if (error) {
           log(`Composition failed: ${stderr || error.message}`);
