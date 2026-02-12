@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import * as path from "path";
+import * as fs from "fs";
 import { parse as parseYaml } from "yaml";
 
 import {
@@ -225,7 +226,8 @@ export class DesignManager {
       "**/node_modules/**",
     );
 
-    // Track .graphql files referenced by federated designs
+    // Track .graphql files referenced by federated designs using canonical paths
+    // to handle case-insensitive filesystems, symlinks, and Unicode normalization
     const federatedSchemaFiles = new Set<string>();
 
     for (const uri of supergraphFiles) {
@@ -237,7 +239,7 @@ export class DesignManager {
             const absPath = path.isAbsolute(sub.schemaPath)
               ? sub.schemaPath
               : path.resolve(path.dirname(uri.fsPath), sub.schemaPath);
-            federatedSchemaFiles.add(absPath);
+            federatedSchemaFiles.add(this.canonicalPath(absPath));
           }
         }
       }
@@ -250,7 +252,7 @@ export class DesignManager {
     );
 
     for (const uri of graphqlFiles) {
-      if (federatedSchemaFiles.has(uri.fsPath)) {
+      if (federatedSchemaFiles.has(this.canonicalPath(uri.fsPath))) {
         continue;
       }
       // Check if file contains type definitions (not just operations)
@@ -347,6 +349,18 @@ export class DesignManager {
         }`,
       );
       return null;
+    }
+  }
+
+  /**
+   * Resolve to a canonical filesystem path for reliable comparison.
+   * Handles symlinks, case-insensitive filesystems, and Unicode normalization.
+   */
+  private canonicalPath(p: string): string {
+    try {
+      return fs.realpathSync(p);
+    } catch {
+      return path.resolve(p);
     }
   }
 
