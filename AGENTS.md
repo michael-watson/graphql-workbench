@@ -81,6 +81,12 @@ Generates GraphQL operations from natural language by searching embedded documen
 
 - `DynamicOperationGenerator` class
 - `DynamicGeneratedOperation` type
+- `FilteredSearchResult` type
+
+**Public playground methods** (for step-by-step execution):
+- `searchRootFieldsOnly(inputVector, minSimilarityScore?, maxDocuments?)` - Run only vector search (steps 3-4)
+- `determineOperationType(results, inputText)` - Run only LLM operation type classification (steps 5-6)
+- `selectRootField(results, operationType, inputText)` - Run only LLM root field selection (steps 7-8)
 
 **When to modify:** Operation generation logic, LLM-based field selection, validation retry loop.
 
@@ -110,6 +116,8 @@ VS Code extension that provides commands for embedding schemas and generating op
 - `src/extension.ts` - Extension entry point, command registration
 - `src/services/embedding-manager.ts` - Manages embedding provider and vector store lifecycle
 - `src/commands/*.ts` - Individual command implementations
+- `src/commands/open-explorer-panel.ts` - Apollo Explorer webview panel
+- `src/commands/open-search-playground.ts` - Vector search playground webview panel
 
 **Build system:** Uses esbuild (not tsc) due to VS Code extension requirements.
 
@@ -120,6 +128,23 @@ VS Code extension that provides commands for embedding schemas and generating op
 - Uses dynamic imports for ESM-only packages (PGLite, node-llama-cpp)
 - Must externalize native modules in esbuild config
 - Settings defined in `package.json` under `contributes.configuration`
+
+## Webview Panel Patterns
+
+The extension uses webview panels for rich UI. Key conventions:
+
+### Creating a New Webview Panel
+
+1. Create a new file in `src/commands/` (e.g., `open-my-panel.ts`)
+2. Use the singleton pattern with a module-level `currentPanel` variable
+3. Use nonce-based CSP for script security
+4. Use VS Code CSS variables (`--vscode-*`) for theme-aware styling
+5. Communicate via message protocol: `panel.webview.postMessage()` / `panel.webview.onDidReceiveMessage()`
+6. Register the command in `extension.ts` and add it to `package.json` under `contributes.commands`
+
+### Progressive Results Pattern
+
+For long-running operations with multiple steps, use an `onProgress` callback to send intermediate results to the webview as each step completes (see `runPlaygroundSearch` in `embedding-manager.ts`). The webview renders each section progressively with loading spinners.
 
 ## Common Tasks
 
@@ -219,6 +244,7 @@ npm run package --workspace=graphql-workbench
 | `packages/graphql-embedding-core/src/*-store.ts` | Vector store implementations       |
 | `packages/graphql-workbench/src/extension.ts`    | VS Code extension entry            |
 | `packages/graphql-workbench/src/commands/*.ts`   | VS Code command handlers           |
+| `packages/graphql-workbench/src/commands/open-*.ts` | Webview panel commands          |
 | `packages/graphql-workbench/esbuild.config.mjs`  | VS Code extension bundler config   |
 
 ## Important Conventions

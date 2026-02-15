@@ -805,4 +805,58 @@ Please fix the operation and return only the corrected GraphQL operation.`;
 
     return fixedOperation;
   }
+
+  // --- Public playground methods for step-by-step execution ---
+
+  /**
+   * Run only steps 3-4: Search vector store for relevant root operation fields.
+   * Returns raw search results with similarity scores.
+   */
+  async searchRootFieldsOnly(
+    inputVector: number[],
+    minSimilarityScore?: number,
+    maxDocuments?: number
+  ): Promise<FilteredSearchResult[]> {
+    const minScore = minSimilarityScore ?? this.minSimilarityScore;
+    const maxDocs = maxDocuments ?? this.maxDocuments;
+
+    this.embeddingDimensions = inputVector.length;
+
+    let currentScore = minScore;
+    let searchResults = await this.searchRootFields(inputVector, currentScore, maxDocs);
+
+    while (searchResults.length === 0 && currentScore - 0.05 >= 0) {
+      currentScore = Math.round((currentScore - 0.05) * 100) / 100;
+      this.log(`No results at similarity >= ${(currentScore + 0.05).toFixed(2)}, retrying with >= ${currentScore.toFixed(2)}`);
+      searchResults = await this.searchRootFields(inputVector, currentScore, maxDocs);
+    }
+
+    return searchResults;
+  }
+
+  /**
+   * Run only steps 5-6: Use LLM to determine the root operation type.
+   */
+  async determineOperationType(
+    results: FilteredSearchResult[],
+    inputText: string
+  ): Promise<RootOperationType> {
+    return this.determineRootOperationType(results, inputText);
+  }
+
+  /**
+   * Run only steps 7-8: Filter by operation type and select the most relevant field.
+   */
+  async selectRootField(
+    results: FilteredSearchResult[],
+    operationType: RootOperationType,
+    inputText: string
+  ): Promise<{ field: EmbeddingDocument; filteredResults: FilteredSearchResult[] }> {
+    const filteredResults = this.filterByOperationType(results, operationType);
+    if (filteredResults.length === 0) {
+      throw new Error(`No ${operationType} fields found in search results`);
+    }
+    const field = await this.selectMostRelevantField(filteredResults, inputText);
+    return { field, filteredResults };
+  }
 }

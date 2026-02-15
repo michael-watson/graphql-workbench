@@ -61,6 +61,10 @@
         "title": "GraphQL Workbench: Open Explorer Panel"
       },
       {
+        "command": "graphql-workbench.openSearchPlayground",
+        "title": "GraphQL Workbench: Open Search Playground"
+      },
+      {
         "command": "graphql-workbench.dismissLintViolation",
         "title": "GraphQL Workbench: Dismiss Lint Violation"
       },

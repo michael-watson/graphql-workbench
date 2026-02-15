@@ -16,6 +16,7 @@ import {
 } from "./commands/lint-schema";
 import { analyzeSchemaDesignCommand } from "./commands/analyze-schema-design";
 import { openExplorerPanelCommand } from "./commands/open-explorer-panel";
+import { openSearchPlaygroundCommand } from "./commands/open-search-playground";
 import {
   refreshDesignsCommand,
   createDesignCommand,
@@ -115,6 +116,13 @@ export async function activate(
     }
   );
 
+  const openSearchPlayground = vscode.commands.registerCommand(
+    "graphql-workbench.openSearchPlayground",
+    () => {
+      openSearchPlaygroundCommand(embeddingManager!);
+    }
+  );
+
   const dismissLintViolation = vscode.commands.registerCommand(
     "graphql-workbench.dismissLintViolation",
     (uri: vscode.Uri, diagnostic: vscode.Diagnostic) => {
@@ -161,6 +169,7 @@ export async function activate(
     lintSchema,
     analyzeSchemaDesign,
     openExplorerPanel,
+    openSearchPlayground,
     dismissLintViolation,
     dismissAllLintViolations,
     lintCodeActions
