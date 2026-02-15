@@ -1,0 +1,56 @@
+# RPI Loop Configuration
+# Customize these settings to control the behavior of your RPI workflow
+
+# Directory paths (relative to project root)
+paths:
+  research: ".rpi/research"
+  specs: ".rpi/specs"
+  to_implement: ".rpi/specs/to-implement"
+  in_progress: ".rpi/specs/in-progress"
+  completed: ".rpi/specs/completed"
+  templates: ".rpi/templates"
+  scripts: ".rpi/scripts"
+
+# Spec ID formatting
+spec_id:
+  # Number of digits in spec ID (e.g., 6 = 000001)
+  digits: 6
+  # Starting ID for first spec
+  start: 1
+
+# Git integration
+git:
+  # Auto-commit completed specs
+  auto_commit: true
+  # Commit message format: {title} = spec title, {id} = spec ID, {summary} = implementation summary
+  commit_message_format: "{title}\n\n{summary}\n\nSpec ID: {id}"
+  # Include co-author tag for Claude Code
+  co_author: "Co-Authored-By: Claude Code <noreply@anthropic.com>"
+
+# Implementation behavior
+implementation:
+  # Maximum iterations for Ralph Wiggum retry loop (0 = unlimited)
+  max_iterations: 10
+  # Run tests after implementation
+  run_tests: true
+  # Test command (leave empty to skip)
+  test_command: ""
+
+# Research phase
+research:
+  # Save research documents with timestamp
+  include_timestamp: true
+  # Research document naming: {timestamp}-{title}.md
+  filename_format: "{timestamp}-{title}.md"
+
+# AI-ready repository features
+ai_ready:
+  # Update AGENTS.md after each implementation
+  update_agents_md: true
+
+# Skill behavior
+skills:
+  # Show verbose output during skill execution
+  verbose: false
+  # Ask for confirmation before implementation
+  require_approval: true
