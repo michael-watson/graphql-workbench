@@ -1,0 +1,24 @@
+{
+  "skills": [
+    {
+      "name": "rpi-research",
+      "path": "../skills/rpi-research"
+    },
+    {
+      "name": "rpi-plan",
+      "path": "../skills/rpi-plan"
+    },
+    {
+      "name": "rpi-implement",
+      "path": "../skills/rpi-implement"
+    },
+    {
+      "name": "rpi-next",
+      "path": "../skills/rpi-next"
+    },
+    {
+      "name": "keep-ai-ready",
+      "path": "../skills/keep-ai-ready"
+    }
+  ]
+}
