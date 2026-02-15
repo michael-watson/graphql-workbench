@@ -145,6 +145,42 @@ interface InitializedConfig {
 
 const DEFAULT_TABLE_NAME = "graphql_embeddings";
 
+export interface PlaygroundSearchResultItem {
+  id: string;
+  name: string;
+  type: string;
+  parentType: string;
+  rootOperationType: string;
+  content: string;
+  score: number;
+  fieldType: string;
+}
+
+export interface PlaygroundSelectedField {
+  id: string;
+  name: string;
+  type: string;
+  content: string;
+  fieldType: string;
+  arguments: Array<{ name: string; type: string }>;
+  parentType: string;
+}
+
+export interface PlaygroundResult {
+  searchResults: PlaygroundSearchResultItem[];
+  operationType: string | null;
+  selectedField: PlaygroundSelectedField | null;
+  settings: {
+    minSimilarityScore: number;
+    maxDocuments: number;
+  };
+}
+
+export interface PlaygroundStep {
+  step: "searchResults" | "operationType" | "selectedField";
+  data: Record<string, unknown>;
+}
+
 export class EmbeddingManager {
   private context: vscode.ExtensionContext;
   private outputChannel: vscode.OutputChannel;
@@ -1090,6 +1126,144 @@ export class EmbeddingManager {
       return fromStore ?? undefined;
     }
     return undefined;
+  }
+
+  /**
+   * Run the vector search playground pipeline step-by-step.
+   * Returns intermediate results for each stage of dynamic operation generation.
+   */
+  async runPlaygroundSearch(
+    query: string,
+    tableName?: string,
+    onProgress?: (step: PlaygroundStep) => void
+  ): Promise<PlaygroundResult> {
+    await this.ensureInitialized(tableName);
+
+    // Ensure dynamic generator is available
+    if (!this.dynamicOperationGenerator) {
+      const docCount = await this.embeddingService!.count();
+      if (docCount === 0) {
+        throw new Error("No schema embedded yet. Please embed a schema first.");
+      }
+      await this.initializeDynamicGenerator();
+      if (!this.dynamicOperationGenerator) {
+        throw new Error(
+          this.lastDynamicGeneratorInitError ??
+            "Could not initialize operation generator."
+        );
+      }
+    }
+
+    if (!this.embeddingProvider) {
+      throw new Error("Embedding provider not available.");
+    }
+
+    const config = this.getConfig();
+    const generator = this.dynamicOperationGenerator as any;
+
+    // Step 1: Embed query
+    this.log(`[Playground] Embedding query: "${query}"`);
+    const inputVector = await this.embeddingProvider.embed(query);
+
+    // Step 2: Vector search for root fields
+    this.log(`[Playground] Searching root fields (minSim=${config.minSimilarityScore}, maxDocs=${config.maxDocuments})`);
+    const searchResults = await generator.searchRootFieldsOnly(
+      inputVector,
+      config.minSimilarityScore,
+      config.maxDocuments
+    );
+
+    const searchResultsPayload = searchResults.map((r: any) => ({
+      id: r.document.id,
+      name: r.document.name,
+      type: r.document.type,
+      parentType: r.document.metadata?.parentType ?? "",
+      rootOperationType: r.document.metadata?.rootOperationType ?? "",
+      content: r.document.content,
+      score: r.score,
+      fieldType: r.document.metadata?.fieldType ?? "",
+    }));
+
+    onProgress?.({
+      step: "searchResults",
+      data: {
+        results: searchResultsPayload,
+        minSimilarityScore: config.minSimilarityScore,
+        maxDocuments: config.maxDocuments,
+      },
+    });
+
+    if (searchResults.length === 0) {
+      return {
+        searchResults: searchResultsPayload,
+        operationType: null,
+        selectedField: null,
+        settings: {
+          minSimilarityScore: config.minSimilarityScore,
+          maxDocuments: config.maxDocuments,
+        },
+      };
+    }
+
+    // Step 3: Determine operation type via LLM
+    this.log("[Playground] Determining operation type...");
+    const operationType = await generator.determineOperationType(
+      searchResults,
+      query
+    );
+    this.log(`[Playground] Operation type: ${operationType}`);
+
+    onProgress?.({
+      step: "operationType",
+      data: { operationType },
+    });
+
+    // Step 4: Select root field via LLM
+    this.log("[Playground] Selecting root field...");
+    let selectedField = null;
+    try {
+      const { field, filteredResults } = await generator.selectRootField(
+        searchResults,
+        operationType,
+        query
+      );
+
+      selectedField = {
+        id: field.id,
+        name: field.name,
+        type: field.type,
+        content: field.content,
+        fieldType: field.metadata?.fieldType ?? "",
+        arguments: field.metadata?.arguments ?? [],
+        parentType: field.metadata?.parentType ?? "",
+      };
+      this.log(`[Playground] Selected field: ${field.name}`);
+
+      onProgress?.({
+        step: "selectedField",
+        data: {
+          selectedField,
+          filteredCount: filteredResults.length,
+        },
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.log(`[Playground] Root field selection failed: ${message}`);
+      onProgress?.({
+        step: "selectedField",
+        data: { selectedField: null, error: message },
+      });
+    }
+
+    return {
+      searchResults: searchResultsPayload,
+      operationType,
+      selectedField,
+      settings: {
+        minSimilarityScore: config.minSimilarityScore,
+        maxDocuments: config.maxDocuments,
+      },
+    };
   }
 
   async analyzeSchemaDesign(tableName?: string): Promise<SchemaDesignReportResult> {
