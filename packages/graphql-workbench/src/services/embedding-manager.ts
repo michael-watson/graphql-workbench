@@ -170,6 +170,10 @@ export interface PlaygroundResult {
   searchResults: PlaygroundSearchResultItem[];
   operationType: string | null;
   selectedField: PlaygroundSelectedField | null;
+  relatedTypes?: Array<{ name: string; type: string; content: string }>;
+  operation?: string;
+  variables?: Record<string, unknown>;
+  validationAttempts?: number;
   settings: {
     minSimilarityScore: number;
     maxDocuments: number;
@@ -177,7 +181,16 @@ export interface PlaygroundResult {
 }
 
 export interface PlaygroundStep {
-  step: "extractedQuery" | "searchResults" | "operationType" | "selectedField";
+  step:
+    | "extractedQuery"
+    | "searchResults"
+    | "operationType"
+    | "selectedField"
+    | "relatedTypes"
+    | "generatingOperation"
+    | "toolCall"
+    | "validationAttempt"
+    | "operationComplete";
   data: Record<string, unknown>;
 }
 
@@ -191,6 +204,7 @@ export class EmbeddingManager {
   private dynamicOperationGenerator: DynamicOperationGeneratorInstance | undefined;
   private lastDynamicGeneratorInitError: string | undefined;
   private llmProvider: LLMProviderInstance | undefined;
+  private _playgroundOnProgress: ((step: PlaygroundStep) => void) | undefined;
   private pglite: unknown;
   private pgPool: Pool | undefined;
   private initialized = false;
@@ -720,6 +734,24 @@ export class EmbeddingManager {
         mcpServerUrl,
         logger: {
           log: (message: string) => this.log(message),
+          onToolCall: (toolName: string, query: string) => {
+            this._playgroundOnProgress?.({
+              step: "toolCall",
+              data: { toolName, query, status: "calling" },
+            });
+          },
+          onToolResult: (toolName: string, resultLength: number) => {
+            this._playgroundOnProgress?.({
+              step: "toolCall",
+              data: { toolName, resultLength, status: "complete" },
+            });
+          },
+          onValidationAttempt: (attempt: number, maxAttempts: number, valid: boolean, errors: string[], operation: string) => {
+            this._playgroundOnProgress?.({
+              step: "validationAttempt",
+              data: { attempt, maxAttempts, valid, errors, operation },
+            });
+          },
         },
       });
       this.log("Dynamic operation generator initialized (without schema validation)");
@@ -1303,6 +1335,7 @@ Output:`;
     // Step 5: Select root field via LLM
     this.log("[Playground] Selecting root field...");
     let selectedField = null;
+    let rawSelectedField: unknown = null;
     try {
       const { field, filteredResults } = await generator.selectRootField(
         searchResults,
@@ -1310,6 +1343,7 @@ Output:`;
         query
       );
 
+      rawSelectedField = field;
       selectedField = {
         id: field.id,
         name: field.name,
@@ -1335,12 +1369,111 @@ Output:`;
         step: "selectedField",
         data: { selectedField: null, error: message },
       });
+      return {
+        searchResults: searchResultsPayload,
+        operationType,
+        selectedField: null,
+        settings: {
+          minSimilarityScore: config.minSimilarityScore,
+          maxDocuments: config.maxDocuments,
+        },
+      };
+    }
+
+    if (!selectedField || !rawSelectedField) {
+      return {
+        searchResults: searchResultsPayload,
+        operationType,
+        selectedField: null,
+        settings: {
+          minSimilarityScore: config.minSimilarityScore,
+          maxDocuments: config.maxDocuments,
+        },
+      };
+    }
+
+    const rawField = rawSelectedField as any;
+
+    // Wire up playground progress so generator logger forwards tool calls / validation steps
+    this._playgroundOnProgress = onProgress;
+
+    let relatedTypesPayload: Array<{ name: string; type: string; content: string }> = [];
+    let operation = "";
+    let variables: Record<string, unknown> = {};
+    let validationAttempts = 0;
+
+    try {
+      // Step 6: Discover related types recursively (Step 9 of 14-step process)
+      this.log("[Playground] Discovering related types...");
+
+      const relatedTypes = await generator.discoverRelatedTypes(rawField);
+      this.log(`[Playground] Discovered ${relatedTypes.length} related types`);
+
+      relatedTypesPayload = relatedTypes.map((t: any) => ({
+        name: t.name,
+        type: t.type ?? t.metadata?.type ?? "",
+        content: t.content,
+      }));
+
+      onProgress?.({
+        step: "relatedTypes",
+        data: { types: relatedTypesPayload },
+      });
+
+      // Step 7: Generate operation with LLM (Step 10 of 14-step process)
+      // Tool calls (Search/Introspect) may occur here — forwarded via logger callbacks
+      this.log("[Playground] Generating operation with LLM...");
+      onProgress?.({
+        step: "generatingOperation",
+        data: {},
+      });
+
+      const generated = await generator.generateOperationWithLLM(
+        rawField,
+        relatedTypes,
+        query
+      );
+      operation = generated.operation;
+      variables = generated.variables;
+
+      this.log("[Playground] Operation generated, starting validation loop...");
+
+      // Step 8: Validate and retry (Steps 11-13 of 14-step process)
+      // Each attempt is surfaced via logger.onValidationAttempt → toolCall/validationAttempt steps
+      const result = await generator.validateAndRetry(
+        operation,
+        [rawField, ...relatedTypes],
+        query,
+        config.maxValidationRetries
+      );
+      operation = result.operation;
+      validationAttempts = result.attempts;
+
+      this.log(`[Playground] Operation complete after ${validationAttempts} validation attempt(s)`);
+
+      onProgress?.({
+        step: "operationComplete",
+        data: { operation, variables, validationAttempts },
+      });
+    } catch (genError) {
+      const message = genError instanceof Error ? genError.message : String(genError);
+      this.log(`[Playground] Operation generation failed: ${message}`);
+      onProgress?.({
+        step: "operationComplete",
+        data: { operation: null, error: message, validationAttempts },
+      });
+    } finally {
+      this._playgroundOnProgress = undefined;
     }
 
     return {
       searchResults: searchResultsPayload,
       operationType,
       selectedField,
+      relatedTypes: relatedTypesPayload,
+      operation: operation || undefined,
+      variables: Object.keys(variables).length > 0 ? variables : undefined,
+      validationAttempts,
       settings: {
         minSimilarityScore: config.minSimilarityScore,
         maxDocuments: config.maxDocuments,

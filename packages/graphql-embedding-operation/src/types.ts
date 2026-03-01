@@ -8,6 +8,12 @@ import type { LLMProvider } from "graphql-embedding-core";
  */
 export interface OperationLogger {
   log(message: string): void;
+  /** Called when the LLM invokes an MCP tool (Search or Introspect) */
+  onToolCall?(toolName: string, query: string): void;
+  /** Called when an MCP tool call returns a result */
+  onToolResult?(toolName: string, resultLength: number): void;
+  /** Called after each validation attempt in the retry loop */
+  onValidationAttempt?(attempt: number, maxAttempts: number, valid: boolean, errors: string[], operation: string): void;
 }
 
 /**

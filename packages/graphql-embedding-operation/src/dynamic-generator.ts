@@ -120,13 +120,17 @@ export class DynamicOperationGenerator {
           const query = (args["query"] as string) ?? "";
           this.log(`[MCP] LLM called tool: ${name}("${query}")`);
           if (name === "Search") {
+            this.logger?.onToolCall?.(name, query);
             const result = await mcpClient.search(query);
             this.log(`[MCP] Search result length: ${result.length} chars`);
+            this.logger?.onToolResult?.(name, result.length);
             return result || "(no results)";
           }
           if (name === "Introspect") {
+            this.logger?.onToolCall?.(name, query);
             const result = await mcpClient.introspect(query);
             this.log(`[MCP] Introspect result length: ${result.length} chars`);
+            this.logger?.onToolResult?.(name, result.length);
             return result || "(no results)";
           }
           return `Unknown tool: ${name}`;
@@ -587,7 +591,7 @@ export class DynamicOperationGenerator {
   /**
    * Step 9: Recursively discover all types referenced by the selected field
    */
-  private async discoverRelatedTypes(
+  async discoverRelatedTypes(
     rootField: EmbeddingDocument
   ): Promise<EmbeddingDocument[]> {
     const discoveredTypes = new Map<string, EmbeddingDocument>();
@@ -794,7 +798,7 @@ export class DynamicOperationGenerator {
   /**
    * Step 10: Generate the GraphQL operation using LLM
    */
-  private async generateOperationWithLLM(
+  async generateOperationWithLLM(
     rootField: EmbeddingDocument,
     types: EmbeddingDocument[],
     inputText: string
@@ -876,7 +880,7 @@ export class DynamicOperationGenerator {
   /**
    * Step 11-13: Validate operation and retry with LLM fixes if needed
    */
-  private async validateAndRetry(
+  async validateAndRetry(
     operation: string,
     context: EmbeddingDocument[],
     inputText: string,
@@ -899,6 +903,8 @@ export class DynamicOperationGenerator {
         validation = this.validateOperation(currentOperation);
         this.log(`[Local] Validation used: local GraphQL parser/validator`);
       }
+
+      this.logger?.onValidationAttempt?.(attempts, maxValidationRetries, validation.valid, validation.errors, currentOperation);
 
       if (validation.valid) {
         this.log("Validation PASSED");

@@ -424,6 +424,223 @@ function getWebviewHtml(webview: vscode.Webview, nonce: string): string {
       font-style: italic;
       padding: 4px 0;
     }
+
+    /* Related types */
+    .type-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 6px;
+    }
+
+    .type-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 10px;
+      font-size: 12px;
+      font-family: var(--vscode-editor-font-family);
+      background: var(--vscode-textCodeBlock-background);
+      border: 1px solid var(--vscode-panel-border);
+      border-radius: 12px;
+    }
+
+    .type-chip-kind {
+      font-size: 10px;
+      opacity: 0.6;
+      text-transform: uppercase;
+    }
+
+    /* Tool call timeline */
+    .tool-timeline {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-top: 6px;
+    }
+
+    .tool-event {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      padding: 6px 10px;
+      border-radius: 4px;
+      font-size: 12px;
+      border: 1px solid var(--vscode-panel-border);
+      background: var(--vscode-editor-background);
+    }
+
+    .tool-event-icon {
+      font-size: 14px;
+      line-height: 1.4;
+      flex-shrink: 0;
+    }
+
+    .tool-event-body {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .tool-event-title {
+      font-weight: 600;
+      font-family: var(--vscode-editor-font-family);
+    }
+
+    .tool-event-query {
+      font-family: var(--vscode-editor-font-family);
+      font-size: 11px;
+      color: var(--vscode-descriptionForeground);
+      word-break: break-all;
+    }
+
+    .tool-event-result {
+      font-size: 11px;
+      color: var(--vscode-charts-green, #4caf50);
+      margin-top: 2px;
+    }
+
+    .tool-event.tool-calling {
+      border-color: var(--vscode-charts-yellow, #ff9800);
+      opacity: 0.8;
+    }
+
+    .tool-event.tool-complete {
+      border-color: var(--vscode-charts-green, #4caf50);
+    }
+
+    .gen-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 0;
+      color: var(--vscode-descriptionForeground);
+      font-style: italic;
+    }
+
+    /* Validation attempts */
+    .validation-attempt {
+      padding: 8px 12px;
+      border-radius: 4px;
+      border: 1px solid var(--vscode-panel-border);
+      margin-bottom: 6px;
+    }
+
+    .validation-attempt.valid {
+      border-color: var(--vscode-charts-green, #4caf50);
+      background: #4caf5010;
+    }
+
+    .validation-attempt.invalid {
+      border-color: var(--vscode-charts-red, #f44336);
+      background: #f4433610;
+    }
+
+    .validation-attempt-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 600;
+      font-size: 12px;
+      margin-bottom: 4px;
+    }
+
+    .validation-badge {
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .validation-badge.pass {
+      background: #4caf5030;
+      color: var(--vscode-charts-green, #4caf50);
+    }
+
+    .validation-badge.fail {
+      background: #f4433630;
+      color: var(--vscode-charts-red, #f44336);
+    }
+
+    .validation-errors {
+      margin-top: 4px;
+    }
+
+    .validation-error {
+      font-size: 11px;
+      color: var(--vscode-errorForeground);
+      padding: 2px 0;
+      font-family: var(--vscode-editor-font-family);
+    }
+
+    /* Generated operation */
+    .operation-block {
+      position: relative;
+      margin-top: 8px;
+    }
+
+    .operation-code {
+      font-family: var(--vscode-editor-font-family);
+      font-size: 12px;
+      white-space: pre;
+      overflow-x: auto;
+      background: var(--vscode-textCodeBlock-background);
+      padding: 12px;
+      border-radius: 4px;
+      border: 1px solid var(--vscode-panel-border);
+    }
+
+    .copy-btn {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      padding: 3px 10px;
+      font-size: 11px;
+      background: var(--vscode-button-secondaryBackground, var(--vscode-button-background));
+      color: var(--vscode-button-secondaryForeground, var(--vscode-button-foreground));
+      border: none;
+      border-radius: 2px;
+      cursor: pointer;
+    }
+
+    .copy-btn:hover {
+      background: var(--vscode-button-secondaryHoverBackground, var(--vscode-button-hoverBackground));
+    }
+
+    .variables-block {
+      margin-top: 8px;
+    }
+
+    .variables-label {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--vscode-descriptionForeground);
+      margin-bottom: 4px;
+    }
+
+    .attempt-op-toggle {
+      margin-top: 6px;
+      font-size: 11px;
+    }
+
+    .attempt-op-toggle summary {
+      cursor: pointer;
+      color: var(--vscode-descriptionForeground);
+      user-select: none;
+    }
+
+    .attempt-op-toggle pre {
+      margin-top: 6px;
+      font-family: var(--vscode-editor-font-family);
+      font-size: 11px;
+      white-space: pre-wrap;
+      background: var(--vscode-textCodeBlock-background);
+      padding: 8px;
+      border-radius: 2px;
+      max-height: 200px;
+      overflow-y: auto;
+    }
   </style>
 </head>
 <body>
@@ -469,6 +686,30 @@ function getWebviewHtml(webview: vscode.Webview, nonce: string): string {
     <div id="rootFieldContent"></div>
   </div>
 
+  <!-- Section 4: Related Types -->
+  <div class="section hidden" id="relatedTypesSection">
+    <h2>Related Type Discovery</h2>
+    <div id="relatedTypesContent"></div>
+  </div>
+
+  <!-- Section 5: Operation Generation (with tool call timeline) -->
+  <div class="section hidden" id="generationSection">
+    <h2>Operation Generation</h2>
+    <div id="generationContent"></div>
+  </div>
+
+  <!-- Section 6: Validation Loop -->
+  <div class="section hidden" id="validationSection">
+    <h2>Validation Loop</h2>
+    <div id="validationContent"></div>
+  </div>
+
+  <!-- Section 7: Generated Operation -->
+  <div class="section hidden" id="operationSection">
+    <h2>Generated Operation</h2>
+    <div id="operationContent"></div>
+  </div>
+
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
 
@@ -484,6 +725,17 @@ function getWebviewHtml(webview: vscode.Webview, nonce: string): string {
     const operationTypeContent = document.getElementById('operationTypeContent');
     const rootFieldSection = document.getElementById('rootFieldSection');
     const rootFieldContent = document.getElementById('rootFieldContent');
+    const relatedTypesSection = document.getElementById('relatedTypesSection');
+    const relatedTypesContent = document.getElementById('relatedTypesContent');
+    const generationSection = document.getElementById('generationSection');
+    const generationContent = document.getElementById('generationContent');
+    const validationSection = document.getElementById('validationSection');
+    const validationContent = document.getElementById('validationContent');
+    const operationSection = document.getElementById('operationSection');
+    const operationContent = document.getElementById('operationContent');
+
+    // Tracks pending tool calls (calling → complete pairing)
+    const pendingToolCalls = new Map();
 
     // --- Message handler ---
     window.addEventListener('message', (event) => {
@@ -510,6 +762,7 @@ function getWebviewHtml(webview: vscode.Webview, nonce: string): string {
         case 'searching': {
           searchBtn.disabled = true;
           searchBtn.textContent = 'Searching...';
+          pendingToolCalls.clear();
           // Reset all sections
           extractionSection.classList.remove('hidden');
           extractionContent.innerHTML = '<span class="spinner"></span><span class="loading-text">LLM extracting entities and keywords...</span>';
@@ -518,6 +771,14 @@ function getWebviewHtml(webview: vscode.Webview, nonce: string): string {
           settingsBadge.textContent = '';
           operationTypeSection.classList.add('hidden');
           rootFieldSection.classList.add('hidden');
+          relatedTypesSection.classList.add('hidden');
+          relatedTypesContent.innerHTML = '';
+          generationSection.classList.add('hidden');
+          generationContent.innerHTML = '';
+          validationSection.classList.add('hidden');
+          validationContent.innerHTML = '';
+          operationSection.classList.add('hidden');
+          operationContent.innerHTML = '';
           break;
         }
 
@@ -645,7 +906,200 @@ function getWebviewHtml(webview: vscode.Webview, nonce: string): string {
           html += '</div>';
 
           rootFieldContent.innerHTML = html;
+
+          // Show related types section with loading
+          relatedTypesSection.classList.remove('hidden');
+          relatedTypesContent.innerHTML = '<span class="spinner"></span><span class="loading-text">Discovering related types...</span>';
           break;
+        }
+
+        case 'relatedTypes': {
+          const types = msg.data.types || [];
+          if (types.length === 0) {
+            relatedTypesContent.innerHTML = '<div class="empty-text">No related object types found.</div>';
+          } else {
+            let html = '<div class="result-count">' + types.length + ' type(s) discovered</div>';
+            html += '<div class="type-chips">';
+            for (const t of types) {
+              html += '<span class="type-chip"><span class="type-chip-kind">' + escapeHtml(t.type || 'type') + '</span>' + escapeHtml(t.name) + '</span>';
+            }
+            html += '</div>';
+            relatedTypesContent.innerHTML = html;
+          }
+
+          // Show generation section
+          generationSection.classList.remove('hidden');
+          generationContent.innerHTML = '<div class="gen-status"><span class="spinner"></span>LLM generating operation' + (hasMcpTools() ? ' (MCP tools available: Search, Introspect)' : '') + '...</div><div class="tool-timeline" id="toolTimeline"></div>';
+          break;
+        }
+
+        case 'generatingOperation': {
+          generationSection.classList.remove('hidden');
+          generationContent.innerHTML = '<div class="gen-status"><span class="spinner"></span>LLM generating operation' + (hasMcpTools() ? ' (MCP tools available: Search, Introspect)' : '') + '...</div><div class="tool-timeline" id="toolTimeline"></div>';
+          break;
+        }
+
+        case 'toolCall': {
+          const toolName = msg.data.toolName;
+          const query = msg.data.query;
+          const status = msg.data.status;
+          const resultLength = msg.data.resultLength;
+          const timeline = document.getElementById('toolTimeline');
+
+          if (!timeline) {
+            // Generation section not yet shown; show it now
+            generationSection.classList.remove('hidden');
+            generationContent.innerHTML = '<div class="gen-status"><span class="spinner"></span>LLM calling tools...</div><div class="tool-timeline" id="toolTimeline"></div>';
+          }
+
+          const tl = document.getElementById('toolTimeline');
+          if (!tl) break;
+
+          if (status === 'calling') {
+            const id = toolName + '_' + Date.now();
+            pendingToolCalls.set(toolName, id);
+            const icon = toolName === 'Search' ? '🔍' : '🔎';
+            const div = document.createElement('div');
+            div.className = 'tool-event tool-calling';
+            div.id = id;
+            div.innerHTML =
+              '<span class="tool-event-icon">' + icon + '</span>' +
+              '<div class="tool-event-body">' +
+                '<div class="tool-event-title">' + escapeHtml(toolName) + ' <span class="spinner" style="width:10px;height:10px;border-width:1.5px;"></span></div>' +
+                '<div class="tool-event-query">' + escapeHtml(query || '') + '</div>' +
+              '</div>';
+            tl.appendChild(div);
+          } else if (status === 'complete') {
+            const id = pendingToolCalls.get(toolName);
+            if (id) {
+              const existing = document.getElementById(id);
+              if (existing) {
+                existing.className = 'tool-event tool-complete';
+                const titleEl = existing.querySelector('.tool-event-title');
+                if (titleEl) titleEl.innerHTML = escapeHtml(toolName);
+                const bodyEl = existing.querySelector('.tool-event-body');
+                if (bodyEl) {
+                  const resultDiv = document.createElement('div');
+                  resultDiv.className = 'tool-event-result';
+                  resultDiv.textContent = '✓ Returned ' + (resultLength || 0) + ' chars';
+                  bodyEl.appendChild(resultDiv);
+                }
+              }
+              pendingToolCalls.delete(toolName);
+            }
+          }
+          break;
+        }
+
+        case 'validationAttempt': {
+          const { attempt, maxAttempts, valid, errors, operation } = msg.data;
+
+          // Show validation section on first attempt
+          if (attempt === 1) {
+            validationSection.classList.remove('hidden');
+            validationContent.innerHTML = '';
+          }
+
+          // Finalize generation section on first validation
+          if (attempt === 1) {
+            const genStatus = generationContent.querySelector('.gen-status');
+            if (genStatus) {
+              genStatus.innerHTML = '✓ Operation generated';
+              genStatus.style.fontStyle = 'normal';
+              genStatus.style.color = 'var(--vscode-charts-green, #4caf50)';
+            }
+          }
+
+          const div = document.createElement('div');
+          div.className = 'validation-attempt ' + (valid ? 'valid' : 'invalid');
+
+          let html = '<div class="validation-attempt-header">';
+          html += 'Attempt ' + attempt + ' / ' + maxAttempts;
+          html += ' <span class="validation-badge ' + (valid ? 'pass' : 'fail') + '">' + (valid ? 'VALID' : 'INVALID') + '</span>';
+          html += '</div>';
+
+          if (!valid && errors && errors.length > 0) {
+            html += '<div class="validation-errors">';
+            for (const err of errors) {
+              html += '<div class="validation-error">• ' + escapeHtml(err) + '</div>';
+            }
+            html += '</div>';
+          }
+
+          if (!valid && operation) {
+            html += '<details class="attempt-op-toggle"><summary>Show operation</summary><pre>' + escapeHtml(operation) + '</pre></details>';
+          }
+
+          div.innerHTML = html;
+          validationContent.appendChild(div);
+
+          // Show final operation section with spinner while we wait
+          if (!valid) {
+            operationSection.classList.remove('hidden');
+            operationContent.innerHTML = '<span class="spinner"></span><span class="loading-text">LLM fixing errors...</span>';
+          }
+          break;
+        }
+
+        case 'operationComplete': {
+          const operation = msg.data.operation;
+          const variables = msg.data.variables;
+          const error = msg.data.error;
+
+          // Finalize generation section if not already done
+          const genStatus = generationContent.querySelector('.gen-status');
+          if (genStatus && genStatus.textContent && genStatus.textContent.includes('...')) {
+            genStatus.innerHTML = '✓ Operation generated';
+            genStatus.style.fontStyle = 'normal';
+            genStatus.style.color = 'var(--vscode-charts-green, #4caf50)';
+          }
+
+          operationSection.classList.remove('hidden');
+
+          if (error) {
+            operationContent.innerHTML = '<div class="error-text">' + escapeHtml(error) + '</div>';
+            break;
+          }
+
+          let html = '';
+          if (operation) {
+            html += '<div class="operation-block">';
+            html += '<pre class="operation-code" id="operationCode">' + escapeHtml(operation) + '</pre>';
+            html += '<button class="copy-btn" onclick="copyOperation()">Copy</button>';
+            html += '</div>';
+          }
+
+          if (variables && Object.keys(variables).length > 0) {
+            html += '<div class="variables-block">';
+            html += '<div class="variables-label">Variables</div>';
+            html += '<pre class="operation-code">' + escapeHtml(JSON.stringify(variables, null, 2)) + '</pre>';
+            html += '</div>';
+          }
+
+          if (!html) {
+            html = '<div class="empty-text">No operation was generated.</div>';
+          }
+
+          operationContent.innerHTML = html;
+          break;
+        }
+      }
+    }
+
+    function hasMcpTools() {
+      // Heuristic: MCP tools are likely available if the server is configured.
+      // We don't have direct access to that info in the webview, so always show hint.
+      return true;
+    }
+
+    function copyOperation() {
+      const code = document.getElementById('operationCode');
+      if (code) {
+        navigator.clipboard.writeText(code.textContent || '').catch(() => {});
+        const btn = operationContent.querySelector('.copy-btn');
+        if (btn) {
+          btn.textContent = 'Copied!';
+          setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
         }
       }
     }
