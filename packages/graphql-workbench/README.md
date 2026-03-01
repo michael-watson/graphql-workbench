@@ -87,6 +87,7 @@ These settings control the LLM used for operation generation and schema design a
 | `graphqlWorkbench.minSimilarityScore` | `0.4` | 0--1 | Minimum cosine similarity score for vector search results. Lower values return more results but may include less relevant matches. |
 | `graphqlWorkbench.maxDocuments` | `50` | 1--200 | Maximum number of documents to retrieve from vector search. |
 | `graphqlWorkbench.maxValidationRetries` | `5` | 1--10 | Maximum attempts the LLM gets to fix an invalid generated operation. |
+| `graphqlWorkbench.useEntityExtraction` | `true` | -- | Before embedding the query for vector search, use the LLM to extract concise entities and keywords. This strips filler words and produces more precise similarity matches. Disable to embed the raw query directly. |
 
 ## Schema Design Workbench
 
@@ -355,6 +356,18 @@ PGLite stores embeddings locally with no external dependencies. Data persists in
      "graphqlWorkbench.postgresConnectionString": "postgresql://user:pass@localhost:5432/graphql_embeddings"
    }
    ```
+
+**Large schema performance.** The extension creates an IVFFlat index with `lists = 100` and automatically sets `ivfflat.probes = 10` before each search query, scanning ~10 % of the index instead of the default 1 %. For schemas with tens of thousands of documents, further improvements are possible:
+
+- **More lists** — recreate the index with `lists ≈ sqrt(row_count)` for finer centroid resolution (e.g., `lists = 255` for 65,000 rows).
+- **HNSW index** — switch to the HNSW index type for better recall without tuning probe counts. Available in pgvector 0.5.0 and later:
+  ```sql
+  DROP INDEX IF EXISTS graphql_embeddings_embedding_idx;
+  CREATE INDEX graphql_embeddings_embedding_idx
+    ON graphql_embeddings
+    USING hnsw (embedding vector_cosine_ops)
+    WITH (m = 16, ef_construction = 64);
+  ```
 
 ### Pinecone
 

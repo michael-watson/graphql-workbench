@@ -86,8 +86,8 @@ The extension supports three vector store backends:
 | Backend | Description | Best for |
 |---------|-------------|----------|
 | **PGLite** (default) | Embedded database stored locally in VS Code's extension storage. No setup required. | Individual use, quick start |
-| **PostgreSQL** | Connects to an external PostgreSQL instance with `pgvector` installed. | Teams, shared environments, large schemas |
-| **Pinecone** | Cloud-hosted vector database via REST API. Requires a Pinecone account and a pre-created index. | Cloud-native workflows, managed infrastructure |
+| **PostgreSQL** | Connects to an external PostgreSQL instance with `pgvector` installed. The extension automatically sets `ivfflat.probes = 10` for better recall on large schemas. | Teams, shared environments, large schemas |
+| **Pinecone** | Cloud-hosted vector database via REST API. Requires a Pinecone account and a pre-created index. Filtered queries over-fetch candidates to compensate for post-filter ANN reduction. | Cloud-native workflows, managed infrastructure |
 
 Change the backend in **Settings > GraphQL Workbench > Vector Store**.
 
