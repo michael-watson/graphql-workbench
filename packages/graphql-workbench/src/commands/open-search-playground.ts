@@ -630,6 +630,22 @@ function getWebviewHtml(webview: vscode.Webview, nonce: string): string {
       user-select: none;
     }
 
+    .fix-tool-timeline-label {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--vscode-descriptionForeground);
+      margin-top: 8px;
+      margin-bottom: 4px;
+    }
+
+    .fix-tool-timeline:empty::after {
+      content: 'No tool calls';
+      font-size: 11px;
+      color: var(--vscode-descriptionForeground);
+      font-style: italic;
+    }
+
     .attempt-op-toggle pre {
       margin-top: 6px;
       font-family: var(--vscode-editor-font-family);
@@ -736,6 +752,10 @@ function getWebviewHtml(webview: vscode.Webview, nonce: string): string {
 
     // Tracks pending tool calls (calling → complete pairing)
     const pendingToolCalls = new Map();
+    // The validation attempt card currently being fixed (tool calls route here)
+    let currentFixAttemptEl = null;
+    // When generation started (ms)
+    let generationStartTime = 0;
 
     // --- Message handler ---
     window.addEventListener('message', (event) => {
@@ -763,6 +783,8 @@ function getWebviewHtml(webview: vscode.Webview, nonce: string): string {
           searchBtn.disabled = true;
           searchBtn.textContent = 'Searching...';
           pendingToolCalls.clear();
+          currentFixAttemptEl = null;
+          generationStartTime = 0;
           // Reset all sections
           extractionSection.classList.remove('hidden');
           extractionContent.innerHTML = '<span class="spinner"></span><span class="loading-text">LLM extracting entities and keywords...</span>';
@@ -934,6 +956,7 @@ function getWebviewHtml(webview: vscode.Webview, nonce: string): string {
         }
 
         case 'generatingOperation': {
+          generationStartTime = Date.now();
           generationSection.classList.remove('hidden');
           generationContent.innerHTML = '<div class="gen-status"><span class="spinner"></span>LLM generating operation' + (hasMcpTools() ? ' (MCP tools available: Search, Introspect)' : '') + '...</div><div class="tool-timeline" id="toolTimeline"></div>';
           break;
@@ -944,19 +967,24 @@ function getWebviewHtml(webview: vscode.Webview, nonce: string): string {
           const query = msg.data.query;
           const status = msg.data.status;
           const resultLength = msg.data.resultLength;
-          const timeline = document.getElementById('toolTimeline');
 
-          if (!timeline) {
+          // If a validation fix is in progress, route tool calls into that attempt card.
+          // Otherwise route to the generation section's main timeline.
+          let tl = currentFixAttemptEl
+            ? currentFixAttemptEl.querySelector('.fix-tool-timeline')
+            : document.getElementById('toolTimeline');
+
+          if (!tl && !currentFixAttemptEl) {
             // Generation section not yet shown; show it now
             generationSection.classList.remove('hidden');
             generationContent.innerHTML = '<div class="gen-status"><span class="spinner"></span>LLM calling tools...</div><div class="tool-timeline" id="toolTimeline"></div>';
+            tl = document.getElementById('toolTimeline');
           }
 
-          const tl = document.getElementById('toolTimeline');
           if (!tl) break;
 
           if (status === 'calling') {
-            const id = toolName + '_' + Date.now();
+            const id = 'tc_' + toolName + '_' + Date.now();
             pendingToolCalls.set(toolName, id);
             const icon = toolName === 'Search' ? '🔍' : '🔎';
             const div = document.createElement('div');
@@ -994,6 +1022,9 @@ function getWebviewHtml(webview: vscode.Webview, nonce: string): string {
         case 'validationAttempt': {
           const { attempt, maxAttempts, valid, errors, operation } = msg.data;
 
+          // Close out any previous fix attempt card (it's now done being fixed)
+          currentFixAttemptEl = null;
+
           // Show validation section on first attempt
           if (attempt === 1) {
             validationSection.classList.remove('hidden');
@@ -1027,14 +1058,20 @@ function getWebviewHtml(webview: vscode.Webview, nonce: string): string {
           }
 
           if (!valid && operation) {
-            html += '<details class="attempt-op-toggle"><summary>Show operation</summary><pre>' + escapeHtml(operation) + '</pre></details>';
+            html += '<details class="attempt-op-toggle"><summary>Show failing operation</summary><pre>' + escapeHtml(operation) + '</pre></details>';
+          }
+
+          // Placeholder for tool calls that happen during the fix LLM call
+          if (!valid) {
+            html += '<div class="fix-tool-timeline-label">Fix attempt tools:</div><div class="fix-tool-timeline tool-timeline"></div>';
           }
 
           div.innerHTML = html;
           validationContent.appendChild(div);
 
-          // Show final operation section with spinner while we wait
           if (!valid) {
+            // Point subsequent toolCall events into this card's timeline
+            currentFixAttemptEl = div;
             operationSection.classList.remove('hidden');
             operationContent.innerHTML = '<span class="spinner"></span><span class="loading-text">LLM fixing errors...</span>';
           }
@@ -1046,6 +1083,14 @@ function getWebviewHtml(webview: vscode.Webview, nonce: string): string {
           const variables = msg.data.variables;
           const error = msg.data.error;
 
+          currentFixAttemptEl = null;
+
+          // Compute elapsed time
+          const elapsedMs = generationStartTime ? Date.now() - generationStartTime : 0;
+          const elapsedStr = elapsedMs >= 1000
+            ? (elapsedMs / 1000).toFixed(1) + 's'
+            : elapsedMs + 'ms';
+
           // Finalize generation section if not already done
           const genStatus = generationContent.querySelector('.gen-status');
           if (genStatus && genStatus.textContent && genStatus.textContent.includes('...')) {
@@ -1055,6 +1100,12 @@ function getWebviewHtml(webview: vscode.Webview, nonce: string): string {
           }
 
           operationSection.classList.remove('hidden');
+
+          // Update section heading to include elapsed time
+          const opHeading = operationSection.querySelector('h2');
+          if (opHeading) {
+            opHeading.innerHTML = 'Generated Operation <span class="settings-badge">' + escapeHtml(elapsedStr) + '</span>';
+          }
 
           if (error) {
             operationContent.innerHTML = '<div class="error-text">' + escapeHtml(error) + '</div>';

@@ -134,7 +134,7 @@ export class McpClient {
    */
   async introspect(query: string): Promise<string> {
     try {
-      return await this.callTool("Introspect", { query });
+      return await this.callTool("Introspect", { query, depth: 1 });
     } catch {
       return "";
     }
