@@ -288,6 +288,71 @@ The `graphql-workbench` package provides a VS Code extension for embedding schem
 - **Lint Schema**: Lint a schema against best practices
 - **Analyze Schema Design**: Get an LLM-powered analysis of your schema design
 - **Clear Embeddings**: Remove all stored embeddings
+- **Apollo MCP Server**: Automatically starts an [Apollo MCP Server](https://github.com/apollographql/apollo-mcp-server) for each design, exposing your schema to AI tools via the Model Context Protocol
+
+### Apollo MCP Server
+
+The extension automatically starts an Apollo MCP Server for every GraphQL design in your workspace, making your schemas available to AI assistants (Claude, Cursor, etc.) that support the Model Context Protocol.
+
+#### How It Works
+
+- On workspace load, one MCP server starts per design on an incrementing port (starting at 9001)
+- Standalone designs serve the `.graphql` schema file directly
+- Federated designs compose the API schema via Rover and serve the federation-directive-free result
+- When you save a schema file, the server restarts automatically with the updated schema
+- The tree view shows each server's URL under the design item
+
+#### First-Time Setup
+
+The Apollo MCP Server binary must be downloaded before servers can start. The extension will prompt you automatically, or you can trigger it manually:
+
+1. Open the Command Palette (`Cmd+Shift+P` / `Ctrl+Shift+P`)
+2. Run **GraphQL Workbench: Download Apollo MCP Server**
+
+The correct binary for your platform is downloaded automatically (macOS arm64/x64, Linux arm64/x64, Windows arm64/x64).
+
+#### Connecting Your AI Tool
+
+Once a server is running, connect your MCP-compatible AI tool to it. Example for Claude Desktop (`claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "my-graphql-api": {
+      "url": "http://127.0.0.1:9001/mcp"
+    }
+  }
+}
+```
+
+Each design gets its own port. The full URL is shown in the tree view under each design's "MCP Server" row.
+
+#### Available MCP Tools
+
+Each server exposes three tools:
+
+| Tool | Description |
+|------|-------------|
+| `introspect` | Returns the full schema SDL |
+| `search` | Semantic search over schema types and fields |
+| `validate` | Validates a GraphQL operation against the schema |
+
+#### Managing Servers
+
+Right-click the **MCP Server** row under any design:
+
+| Action | When Available | Effect |
+|--------|---------------|--------|
+| **Start** | Server stopped | Starts the server |
+| **Stop** | Server running | Stops the server |
+| **Disable** | Running or stopped | Stops and persists disabled state across restarts |
+| **Enable** | Server disabled | Re-enables and starts the server |
+
+#### Settings
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `graphqlWorkbench.enableMcpServer` | `true` | Enable/disable all MCP servers globally |
 
 ### Installation
 
@@ -317,6 +382,7 @@ npm run package
 | `graphqlWorkbench.minSimilarityScore` | `0.4` | Minimum cosine similarity score for search results (0-1) |
 | `graphqlWorkbench.maxDocuments` | `50` | Maximum documents returned from similarity search (1-200) |
 | `graphqlWorkbench.maxValidationRetries` | `5` | Maximum LLM retries when fixing invalid operations (1-10) |
+| `graphqlWorkbench.enableMcpServer` | `true` | Start an Apollo MCP Server for each design (port 9001+) |
 
 ## Document Types
 
