@@ -13,7 +13,7 @@ export interface OperationLogger {
   /** Called when an MCP tool call returns a result */
   onToolResult?(toolName: string, resultLength: number): void;
   /** Called after each validation attempt in the retry loop */
-  onValidationAttempt?(attempt: number, maxAttempts: number, valid: boolean, errors: string[], operation: string): void;
+  onValidationAttempt?(attempt: number, maxAttempts: number, valid: boolean, errors: string[], operation: string, validationMethod: "mcp" | "local"): void;
 }
 
 /**

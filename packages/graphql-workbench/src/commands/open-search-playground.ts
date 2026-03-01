@@ -646,6 +646,27 @@ function getWebviewHtml(webview: vscode.Webview, nonce: string): string {
       font-style: italic;
     }
 
+    .validation-method {
+      font-size: 10px;
+      font-weight: normal;
+      padding: 1px 6px;
+      border-radius: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+
+    .validation-method-mcp {
+      background: #1565c022;
+      color: var(--vscode-charts-blue, #42a5f5);
+      border: 1px solid var(--vscode-charts-blue, #42a5f5);
+    }
+
+    .validation-method-local {
+      background: #7b1fa222;
+      color: var(--vscode-charts-purple, #ab47bc);
+      border: 1px solid var(--vscode-charts-purple, #ab47bc);
+    }
+
     .attempt-op-toggle pre {
       margin-top: 6px;
       font-family: var(--vscode-editor-font-family);
@@ -1020,7 +1041,7 @@ function getWebviewHtml(webview: vscode.Webview, nonce: string): string {
         }
 
         case 'validationAttempt': {
-          const { attempt, maxAttempts, valid, errors, operation } = msg.data;
+          const { attempt, maxAttempts, valid, errors, operation, validationMethod } = msg.data;
 
           // Close out any previous fix attempt card (it's now done being fixed)
           currentFixAttemptEl = null;
@@ -1044,9 +1065,13 @@ function getWebviewHtml(webview: vscode.Webview, nonce: string): string {
           const div = document.createElement('div');
           div.className = 'validation-attempt ' + (valid ? 'valid' : 'invalid');
 
+          const methodLabel = validationMethod === 'mcp' ? 'MCP Server' : 'Local Parser';
+          const methodClass = validationMethod === 'mcp' ? 'validation-method-mcp' : 'validation-method-local';
+
           let html = '<div class="validation-attempt-header">';
           html += 'Attempt ' + attempt + ' / ' + maxAttempts;
           html += ' <span class="validation-badge ' + (valid ? 'pass' : 'fail') + '">' + (valid ? 'VALID' : 'INVALID') + '</span>';
+          html += ' <span class="validation-method ' + methodClass + '">' + escapeHtml(methodLabel) + '</span>';
           html += '</div>';
 
           if (!valid && errors && errors.length > 0) {

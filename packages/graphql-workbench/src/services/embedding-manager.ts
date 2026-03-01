@@ -746,10 +746,10 @@ export class EmbeddingManager {
               data: { toolName, resultLength, status: "complete" },
             });
           },
-          onValidationAttempt: (attempt: number, maxAttempts: number, valid: boolean, errors: string[], operation: string) => {
+          onValidationAttempt: (attempt: number, maxAttempts: number, valid: boolean, errors: string[], operation: string, validationMethod: "mcp" | "local") => {
             this._playgroundOnProgress?.({
               step: "validationAttempt",
-              data: { attempt, maxAttempts, valid, errors, operation },
+              data: { attempt, maxAttempts, valid, errors, operation, validationMethod },
             });
           },
         },
@@ -898,10 +898,10 @@ export class EmbeddingManager {
               data: { toolName, resultLength, status: "complete" },
             });
           },
-          onValidationAttempt: (attempt: number, maxAttempts: number, valid: boolean, errors: string[], operation: string) => {
+          onValidationAttempt: (attempt: number, maxAttempts: number, valid: boolean, errors: string[], operation: string, validationMethod: "mcp" | "local") => {
             this._playgroundOnProgress?.({
               step: "validationAttempt",
-              data: { attempt, maxAttempts, valid, errors, operation },
+              data: { attempt, maxAttempts, valid, errors, operation, validationMethod },
             });
           },
         },
@@ -1431,7 +1431,7 @@ Output:`;
         name: t.name,
         type: t.type ?? t.metadata?.type ?? "",
         content: t.content,
-      }));
+      })).sort((a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name));
 
       onProgress?.({
         step: "relatedTypes",
