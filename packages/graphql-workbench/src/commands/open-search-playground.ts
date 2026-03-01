@@ -379,6 +379,51 @@ function getWebviewHtml(webview: vscode.Webview, nonce: string): string {
       max-height: 400px;
       overflow-y: auto;
     }
+
+    .extraction-card {
+      margin-top: 4px;
+    }
+
+    .extraction-row {
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+      padding: 4px 0;
+    }
+
+    .extraction-label {
+      min-width: 80px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--vscode-descriptionForeground);
+      flex-shrink: 0;
+    }
+
+    .extraction-value {
+      font-family: var(--vscode-editor-font-family);
+      font-size: 12px;
+      padding: 2px 8px;
+      border-radius: 3px;
+      background: var(--vscode-textCodeBlock-background);
+    }
+
+    .extraction-original {
+      text-decoration: line-through;
+      opacity: 0.6;
+    }
+
+    .extraction-extracted {
+      color: var(--vscode-charts-green, #4caf50);
+    }
+
+    .extraction-note {
+      font-size: 11px;
+      color: var(--vscode-descriptionForeground);
+      font-style: italic;
+      padding: 4px 0;
+    }
   </style>
 </head>
 <body>
@@ -395,6 +440,12 @@ function getWebviewHtml(webview: vscode.Webview, nonce: string): string {
       <input type="text" id="promptInput" placeholder="e.g., get all users with their posts" />
       <button id="searchBtn">Search</button>
     </div>
+  </div>
+
+  <!-- Section 0: Query Extraction -->
+  <div class="section hidden" id="extractionSection">
+    <h2>Query Extraction</h2>
+    <div id="extractionContent"></div>
   </div>
 
   <!-- Section 1: Vector Search Results -->
@@ -424,6 +475,8 @@ function getWebviewHtml(webview: vscode.Webview, nonce: string): string {
     const tableSelect = document.getElementById('tableSelect');
     const promptInput = document.getElementById('promptInput');
     const searchBtn = document.getElementById('searchBtn');
+    const extractionSection = document.getElementById('extractionSection');
+    const extractionContent = document.getElementById('extractionContent');
     const searchResultsSection = document.getElementById('searchResultsSection');
     const searchResultsContent = document.getElementById('searchResultsContent');
     const settingsBadge = document.getElementById('settingsBadge');
@@ -458,8 +511,10 @@ function getWebviewHtml(webview: vscode.Webview, nonce: string): string {
           searchBtn.disabled = true;
           searchBtn.textContent = 'Searching...';
           // Reset all sections
-          searchResultsSection.classList.remove('hidden');
-          searchResultsContent.innerHTML = '<span class="spinner"></span><span class="loading-text">Running vector search...</span>';
+          extractionSection.classList.remove('hidden');
+          extractionContent.innerHTML = '<span class="spinner"></span><span class="loading-text">LLM extracting entities and keywords...</span>';
+          searchResultsSection.classList.add('hidden');
+          searchResultsContent.innerHTML = '';
           settingsBadge.textContent = '';
           operationTypeSection.classList.add('hidden');
           rootFieldSection.classList.add('hidden');
@@ -489,6 +544,33 @@ function getWebviewHtml(webview: vscode.Webview, nonce: string): string {
 
     function handleStep(msg) {
       switch (msg.step) {
+        case 'extractedQuery': {
+          const data = msg.data;
+          const extractionEnabled = data.extractionEnabled;
+          const original = data.originalQuery;
+          const extracted = data.extractedQuery;
+          const changed = original !== extracted;
+
+          let html = '<div class="extraction-card">';
+          if (!extractionEnabled) {
+            html += '<div class="extraction-row"><span class="extraction-label">Extraction disabled</span><span class="extraction-value">' + escapeHtml(original) + '</span></div>';
+          } else if (changed) {
+            html += '<div class="extraction-row"><span class="extraction-label">Original</span><span class="extraction-value extraction-original">' + escapeHtml(original) + '</span></div>';
+            html += '<div class="extraction-row"><span class="extraction-label">Extracted</span><span class="extraction-value extraction-extracted">' + escapeHtml(extracted) + '</span></div>';
+          } else {
+            html += '<div class="extraction-row"><span class="extraction-label">Query</span><span class="extraction-value">' + escapeHtml(original) + '</span></div>';
+            html += '<div class="extraction-note">No change — query terms already concise</div>';
+          }
+          html += '</div>';
+
+          extractionContent.innerHTML = html;
+
+          // Show search results section with loading
+          searchResultsSection.classList.remove('hidden');
+          searchResultsContent.innerHTML = '<span class="spinner"></span><span class="loading-text">Running vector search...</span>';
+          break;
+        }
+
         case 'searchResults': {
           const data = msg.data;
           settingsBadge.textContent = 'minSimilarity: ' + data.minSimilarityScore + ' | maxDocs: ' + data.maxDocuments;

@@ -177,7 +177,7 @@ export interface PlaygroundResult {
 }
 
 export interface PlaygroundStep {
-  step: "searchResults" | "operationType" | "selectedField";
+  step: "extractedQuery" | "searchResults" | "operationType" | "selectedField";
   data: Record<string, unknown>;
 }
 
@@ -257,6 +257,7 @@ export class EmbeddingManager {
       minSimilarityScore: config.get<number>("minSimilarityScore", 0.4),
       maxDocuments: config.get<number>("maxDocuments", 50),
       maxValidationRetries: config.get<number>("maxValidationRetries", 5),
+      useEntityExtraction: config.get<boolean>("useEntityExtraction", true),
     };
   }
 
@@ -1129,6 +1130,47 @@ export class EmbeddingManager {
   }
 
   /**
+   * Use the LLM to extract entities and keywords from a natural language query.
+   * Returns a condensed string of terms in original order, for use as the embedding input.
+   * Falls back to the raw query if the LLM is unavailable or extraction fails.
+   */
+  private async extractSearchTerms(query: string): Promise<string> {
+    if (!this.llmProvider) {
+      return query;
+    }
+
+    const prompt = `You are a keyword and entity extractor. Extract the key entities, field names, and search terms from the user's GraphQL search query. Return ONLY the extracted terms as a space-separated string, preserving the original order they appear. Remove filler words (get, all, with, their, find, show, me, the, a, an, of, for, by, and, or). Do not add new words not in the original query. Do not explain.
+
+Examples:
+Input: "get all users with their recent posts and profile pictures"
+Output: users recent posts profile pictures
+
+Input: "find products by category with price range"
+Output: products category price range
+
+Input: "show me the order details for a specific customer"
+Output: order details customer
+
+Input: "create a new user account with email and password"
+Output: user account email password
+
+Now extract from:
+Input: "${query.replace(/"/g, '\\"')}"
+Output:`;
+
+    try {
+      const response = await (this.llmProvider as any).complete(
+        [{ role: "user", content: prompt }],
+        { temperature: 0.0, maxTokens: 100 }
+      );
+      const extracted = response.trim();
+      return extracted.length > 0 ? extracted : query;
+    } catch {
+      return query;
+    }
+  }
+
+  /**
    * Run the vector search playground pipeline step-by-step.
    * Returns intermediate results for each stage of dynamic operation generation.
    */
@@ -1161,11 +1203,28 @@ export class EmbeddingManager {
     const config = this.getConfig();
     const generator = this.dynamicOperationGenerator as any;
 
-    // Step 1: Embed query
-    this.log(`[Playground] Embedding query: "${query}"`);
-    const inputVector = await this.embeddingProvider.embed(query);
+    // Step 1: Extract entities/keywords from query via LLM (if enabled)
+    let searchQuery = query;
+    if (config.useEntityExtraction) {
+      this.log(`[Playground] Extracting entities/keywords from query: "${query}"`);
+      searchQuery = await this.extractSearchTerms(query);
+      this.log(`[Playground] Extracted search terms: "${searchQuery}"`);
+    }
 
-    // Step 2: Vector search for root fields
+    onProgress?.({
+      step: "extractedQuery",
+      data: {
+        originalQuery: query,
+        extractedQuery: searchQuery,
+        extractionEnabled: config.useEntityExtraction,
+      },
+    });
+
+    // Step 2: Embed extracted query
+    this.log(`[Playground] Embedding query: "${searchQuery}"`);
+    const inputVector = await this.embeddingProvider.embed(searchQuery);
+
+    // Step 3: Vector search for root fields
     this.log(`[Playground] Searching root fields (minSim=${config.minSimilarityScore}, maxDocs=${config.maxDocuments})`);
     const searchResults = await generator.searchRootFieldsOnly(
       inputVector,
@@ -1205,7 +1264,7 @@ export class EmbeddingManager {
       };
     }
 
-    // Step 3: Determine operation type via LLM
+    // Step 4: Determine operation type via LLM
     this.log("[Playground] Determining operation type...");
     const operationType = await generator.determineOperationType(
       searchResults,
@@ -1218,7 +1277,7 @@ export class EmbeddingManager {
       data: { operationType },
     });
 
-    // Step 4: Select root field via LLM
+    // Step 5: Select root field via LLM
     this.log("[Playground] Selecting root field...");
     let selectedField = null;
     try {

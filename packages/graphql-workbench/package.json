@@ -144,12 +144,20 @@
         "title": "Embed Schema"
       },
       {
-        "command": "graphql-workbench.toggleMcpServer",
-        "title": "Toggle MCP Server"
+        "command": "graphql-workbench.startMcpServer",
+        "title": "Start MCP Server"
       },
       {
-        "command": "graphql-workbench.restartMcpServer",
-        "title": "Restart MCP Server"
+        "command": "graphql-workbench.stopMcpServer",
+        "title": "Stop MCP Server"
+      },
+      {
+        "command": "graphql-workbench.enableMcpServer",
+        "title": "Enable MCP Server"
+      },
+      {
+        "command": "graphql-workbench.disableMcpServer",
+        "title": "Disable MCP Server"
       },
       {
         "command": "graphql-workbench.downloadMcpBinary",
@@ -285,6 +293,11 @@
           "maximum": 10,
           "description": "Maximum attempts to fix invalid generated operations"
         },
+        "graphqlWorkbench.useEntityExtraction": {
+          "type": "boolean",
+          "default": true,
+          "description": "Use LLM to extract entities and keywords from search queries before embedding. Produces more precise vector search results by stripping filler words."
+        },
         "graphqlWorkbench.enableDesignWorkbench": {
           "type": "boolean",
           "default": true,
@@ -366,11 +379,19 @@
           "when": "false"
         },
         {
-          "command": "graphql-workbench.toggleMcpServer",
+          "command": "graphql-workbench.startMcpServer",
           "when": "false"
         },
         {
-          "command": "graphql-workbench.restartMcpServer",
+          "command": "graphql-workbench.stopMcpServer",
+          "when": "false"
+        },
+        {
+          "command": "graphql-workbench.enableMcpServer",
+          "when": "false"
+        },
+        {
+          "command": "graphql-workbench.disableMcpServer",
           "when": "false"
         }
       ],
@@ -506,14 +527,24 @@
           "group": "2_danger"
         },
         {
-          "command": "graphql-workbench.toggleMcpServer",
-          "when": "view == schema-design-workbench.designs && viewItem == mcp-status",
+          "command": "graphql-workbench.startMcpServer",
+          "when": "view == schema-design-workbench.designs && viewItem == mcp-status-stopped",
           "group": "1_mcp@1"
         },
         {
-          "command": "graphql-workbench.restartMcpServer",
-          "when": "view == schema-design-workbench.designs && viewItem == mcp-status",
-          "group": "1_mcp@2"
+          "command": "graphql-workbench.stopMcpServer",
+          "when": "view == schema-design-workbench.designs && viewItem == mcp-status-running",
+          "group": "1_mcp@1"
+        },
+        {
+          "command": "graphql-workbench.disableMcpServer",
+          "when": "view == schema-design-workbench.designs && (viewItem == mcp-status-running || viewItem == mcp-status-stopped)",
+          "group": "2_mcp@1"
+        },
+        {
+          "command": "graphql-workbench.enableMcpServer",
+          "when": "view == schema-design-workbench.designs && viewItem == mcp-status-disabled",
+          "group": "2_mcp@1"
         }
       ]
     }
