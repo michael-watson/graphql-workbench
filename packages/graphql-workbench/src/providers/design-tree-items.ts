@@ -10,7 +10,8 @@ export type DesignItemType =
   | "supergraph-schema"
   | "api-schema"
   | "embedding-status"
-  | "federation-version";
+  | "federation-version"
+  | "mcp-status";
 
 export class DesignTreeItem extends vscode.TreeItem {
   constructor(
@@ -23,7 +24,10 @@ export class DesignTreeItem extends vscode.TreeItem {
     public readonly groupName?: string,
     public readonly line?: number,
     public readonly embeddingTableName?: string,
-    public readonly isEmbedded?: boolean
+    public readonly isEmbedded?: boolean,
+    public readonly mcpPort?: number,
+    public readonly mcpEnabled?: boolean,
+    public readonly mcpRunning?: boolean
   ) {
     super(label, collapsibleState);
     this.contextValue = itemType;
@@ -116,6 +120,29 @@ export class DesignTreeItem extends vscode.TreeItem {
             title: "Go to Federation Version",
             arguments: [designPath, line],
           };
+        }
+        break;
+      case "mcp-status":
+        if (mcpEnabled === false) {
+          this.iconPath = new vscode.ThemeIcon("plug");
+          this.tooltip = "Apollo MCP Server disabled. Click to enable.";
+          this.description = "MCP disabled";
+          this.command = {
+            command: "graphql-workbench.toggleMcpServer",
+            title: "Enable MCP Server",
+            arguments: [this],
+          };
+        } else if (mcpRunning && mcpPort !== undefined) {
+          this.iconPath = new vscode.ThemeIcon(
+            "plug",
+            new vscode.ThemeColor("charts.green")
+          );
+          this.tooltip = `Apollo MCP Server running at http://127.0.0.1:${mcpPort}/mcp`;
+          this.description = `http://127.0.0.1:${mcpPort}/mcp`;
+        } else {
+          this.iconPath = new vscode.ThemeIcon("plug");
+          this.tooltip = "Apollo MCP Server not running (schema may be invalid or binary not downloaded)";
+          this.description = "MCP not running";
         }
         break;
     }

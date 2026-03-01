@@ -2,6 +2,8 @@ import * as vscode from "vscode";
 import * as path from "path";
 import { EmbeddingManager } from "./services/embedding-manager";
 import { DesignManager } from "./services/design-manager";
+import { McpManager } from "./services/mcp-manager";
+import { McpBinaryManager } from "./services/mcp-binary-manager";
 import { DesignTreeProvider } from "./providers/design-tree-provider";
 import { EntityStore } from "./services/entity-store";
 import { FederationCompletionProvider } from "./providers/federation-completion-provider";
@@ -36,11 +38,15 @@ import {
   clearDesignEmbeddingsCommand,
   reEmbedDesignCommand,
   embeddingStatusClickCommand,
+  toggleMcpServerCommand,
+  restartMcpServerCommand,
+  downloadMcpBinaryCommand,
 } from "./commands/design-workbench-commands";
 import type { DesignTreeItem } from "./providers/design-tree-items";
 
 let embeddingManager: EmbeddingManager | undefined;
 let designManager: DesignManager | undefined;
+let mcpManager: McpManager | undefined;
 let outputChannel: vscode.OutputChannel | undefined;
 let entityStore: EntityStore | undefined;
 
@@ -184,7 +190,10 @@ export async function activate(
 
   designManager = new DesignManager(outputChannel, designDiagnostics, context);
 
-  const treeProvider = new DesignTreeProvider(designManager);
+  const mcpBinaryManager = new McpBinaryManager(context, outputChannel);
+  mcpManager = new McpManager(context, outputChannel, designManager, mcpBinaryManager);
+
+  const treeProvider = new DesignTreeProvider(designManager, mcpManager);
   const treeView = vscode.window.createTreeView(
     "schema-design-workbench.designs",
     {
@@ -195,6 +204,7 @@ export async function activate(
   context.subscriptions.push(treeView);
 
   designManager.onDidChangeDesigns(() => treeProvider.refresh());
+  mcpManager.onDidChangeMcpServers(() => treeProvider.refresh());
 
   // Design workbench commands
   const refreshDesigns = vscode.commands.registerCommand(
@@ -343,6 +353,27 @@ export async function activate(
     }
   );
 
+  const toggleMcpServer = vscode.commands.registerCommand(
+    "graphql-workbench.toggleMcpServer",
+    async (item: DesignTreeItem) => {
+      await toggleMcpServerCommand(mcpManager!, item);
+    }
+  );
+
+  const restartMcpServer = vscode.commands.registerCommand(
+    "graphql-workbench.restartMcpServer",
+    async (item: DesignTreeItem) => {
+      await restartMcpServerCommand(mcpManager!, item);
+    }
+  );
+
+  const downloadMcpBinary = vscode.commands.registerCommand(
+    "graphql-workbench.downloadMcpBinary",
+    async () => {
+      await downloadMcpBinaryCommand(mcpBinaryManager);
+    }
+  );
+
   context.subscriptions.push(
     refreshDesigns,
     createDesign,
@@ -362,7 +393,10 @@ export async function activate(
     generateOperationForDesign,
     clearDesignEmbeddings,
     reEmbedDesign,
-    embeddingStatusClick
+    embeddingStatusClick,
+    toggleMcpServer,
+    restartMcpServer,
+    downloadMcpBinary
   );
 
   // Validate on save
@@ -471,6 +505,17 @@ export async function activate(
         mod.resetRoverCache()
       );
     }
+    if (e.affectsConfiguration("graphqlWorkbench.enableMcpServer")) {
+      const enabled = vscode.workspace
+        .getConfiguration("graphqlWorkbench")
+        .get<boolean>("enableMcpServer", true);
+      if (enabled) {
+        mcpManager?.startAllEnabledServers();
+      } else {
+        mcpManager?.stopAllServers();
+      }
+      treeProvider.refresh();
+    }
   });
   context.subscriptions.push(onConfigChange);
 
@@ -483,8 +528,15 @@ export async function activate(
       if (designManager) {
         designManager.dispose();
       }
+      if (mcpManager) {
+        mcpManager.dispose();
+      }
     },
   });
+
+  // --- Initialize MCP Manager ---
+  // Must be done before design discovery so it can react to onDidValidateDesign events
+  await mcpManager.initialize();
 
   // --- Federation Entity Completion ---
   // Initialize shared PGLite and entity store, then start design workbench.
@@ -543,6 +595,10 @@ export async function deactivate(): Promise<void> {
   if (designManager) {
     designManager.dispose();
     designManager = undefined;
+  }
+  if (mcpManager) {
+    mcpManager.dispose();
+    mcpManager = undefined;
   }
   entityStore = undefined;
 }

@@ -4,6 +4,8 @@ import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import type { DesignManager } from "../services/design-manager";
 import type { DesignTreeItem } from "../providers/design-tree-items";
 import type { EmbeddingManager } from "../services/embedding-manager";
+import type { McpManager } from "../services/mcp-manager";
+import type { McpBinaryManager } from "../services/mcp-binary-manager";
 import {
   composeSupergraphSchema,
   composeApiSchema,
@@ -866,4 +868,33 @@ export async function embeddingStatusClickCommand(
     await embedDesignCommand(designManager, embeddingManager, item);
   }
   // If already embedded, clicking does nothing (use context menu for actions)
+}
+
+export async function toggleMcpServerCommand(
+  mcpManager: McpManager,
+  item: DesignTreeItem
+): Promise<void> {
+  await mcpManager.toggleDesign(item.designPath);
+}
+
+export async function restartMcpServerCommand(
+  mcpManager: McpManager,
+  item: DesignTreeItem
+): Promise<void> {
+  await vscode.window.withProgress(
+    {
+      location: vscode.ProgressLocation.Notification,
+      title: "Restarting MCP Server...",
+      cancellable: false,
+    },
+    async () => {
+      await mcpManager.restartServer(item.designPath);
+    }
+  );
+}
+
+export async function downloadMcpBinaryCommand(
+  binaryManager: McpBinaryManager
+): Promise<void> {
+  await binaryManager.downloadBinary();
 }

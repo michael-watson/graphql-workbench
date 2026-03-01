@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import * as path from "path";
 import { DesignTreeItem } from "./design-tree-items";
 import type { DesignManager, DesignEntry } from "../services/design-manager";
+import type { McpManager } from "../services/mcp-manager";
 
 async function loadGraphQL() {
   const graphql = await import("graphql");
@@ -25,7 +26,10 @@ export class DesignTreeProvider
     new vscode.EventEmitter<DesignTreeItem | undefined | void>();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
-  constructor(private designManager: DesignManager) {}
+  constructor(
+    private designManager: DesignManager,
+    private mcpManager?: McpManager
+  ) {}
 
   refresh(): void {
     this._onDidChangeTreeData.fire();
@@ -92,7 +96,12 @@ export class DesignTreeProvider
 
     const items: DesignTreeItem[] = [];
 
-    // Add embedding status at the top
+    // Add MCP status at the top
+    if (this.mcpManager?.isGloballyEnabled()) {
+      items.push(this.createMcpStatusItem(element.designPath));
+    }
+
+    // Add embedding status
     items.push(this.createEmbeddingStatusItem(design, element.designPath));
 
     // Add federation version if available
@@ -152,7 +161,12 @@ export class DesignTreeProvider
     const design = this.designManager.getDesign(element.designPath);
     const items: DesignTreeItem[] = [];
 
-    // Add embedding status at the top
+    // Add MCP status at the top
+    if (this.mcpManager?.isGloballyEnabled()) {
+      items.push(this.createMcpStatusItem(element.designPath));
+    }
+
+    // Add embedding status
     if (design) {
       items.push(this.createEmbeddingStatusItem(design, element.designPath));
     }
@@ -165,6 +179,28 @@ export class DesignTreeProvider
     items.push(...typeGroups);
 
     return items;
+  }
+
+  private createMcpStatusItem(designPath: string): DesignTreeItem {
+    const enabled = this.mcpManager?.isDesignEnabled(designPath) ?? true;
+    const running = this.mcpManager?.isServerRunning(designPath) ?? false;
+    const port = this.mcpManager?.getServerPort(designPath);
+
+    return new DesignTreeItem(
+      "MCP Server",
+      "mcp-status",
+      vscode.TreeItemCollapsibleState.None,
+      designPath,
+      undefined, // subgraphName
+      undefined, // schemaFilePath
+      undefined, // groupName
+      undefined, // line
+      undefined, // embeddingTableName
+      undefined, // isEmbedded
+      port,
+      enabled,
+      running
+    );
   }
 
   private createEmbeddingStatusItem(

@@ -54,6 +54,13 @@ export class DesignManager {
   }>();
   readonly onShouldClearEmbeddings = this._onShouldClearEmbeddings.event;
 
+  /** Event fired after a design is validated with its result */
+  private readonly _onDidValidateDesign = new vscode.EventEmitter<{
+    design: DesignEntry;
+    result: ValidationResult;
+  }>();
+  readonly onDidValidateDesign = this._onDidValidateDesign.event;
+
   constructor(
     outputChannel: vscode.OutputChannel,
     diagnostics: vscode.DiagnosticCollection,
@@ -412,6 +419,7 @@ export class DesignManager {
       );
     }
     this.publishDiagnostics(design, result);
+    this._onDidValidateDesign.fire({ design, result });
     this._onDidChangeDesigns.fire();
     return result;
   }
@@ -572,5 +580,6 @@ export class DesignManager {
     this._onDidChangeDesigns.dispose();
     this._onShouldReEmbed.dispose();
     this._onShouldClearEmbeddings.dispose();
+    this._onDidValidateDesign.dispose();
   }
 }
