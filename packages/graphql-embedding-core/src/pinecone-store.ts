@@ -12,6 +12,14 @@ export interface PineconeVectorStoreOptions {
   indexHost: string;
   namespace?: string;
   dimensions: number;
+  /**
+   * Multiplier applied to topK when metadata or column filters are present.
+   * Pinecone pod-based indexes apply filters after the ANN search (post-filtering),
+   * so requesting more candidates than needed ensures enough survive the filter.
+   * For serverless indexes the effect is less critical but still a safe default.
+   * Default: 5
+   */
+  filterTopKMultiplier?: number;
 }
 
 const BATCH_SIZE = 100;
@@ -36,6 +44,7 @@ export class PineconeVectorStore implements VectorStore {
   private readonly indexHost: string;
   private readonly namespace: string;
   private readonly dimensions: number;
+  private readonly filterTopKMultiplier: number;
 
   constructor(options: PineconeVectorStoreOptions) {
     this.apiKey = options.apiKey;
@@ -46,6 +55,7 @@ export class PineconeVectorStore implements VectorStore {
     this.indexHost = host;
     this.namespace = options.namespace ?? "graphql_embeddings";
     this.dimensions = options.dimensions;
+    this.filterTopKMultiplier = options.filterTopKMultiplier ?? 5;
   }
 
   private get headers(): Record<string, string> {
@@ -167,10 +177,20 @@ export class PineconeVectorStore implements VectorStore {
       ? embedding.map(() => NEAR_ZERO)
       : embedding;
 
+    // When metadata/column filters are present, request more candidates than
+    // needed. Pod-based Pinecone indexes post-filter ANN results, so a
+    // selective filter (e.g. parentType IN Query/Mutation/Subscription) can
+    // eliminate most candidates and return far fewer than `limit`. Over-fetching
+    // by filterTopKMultiplier compensates. The Pinecone topK ceiling is 10,000.
+    const hasFilters = metadataFilters.length > 0 || columnFilters.length > 0;
+    const topK = hasFilters
+      ? Math.min(limit * this.filterTopKMultiplier, 10_000)
+      : limit;
+
     const body: Record<string, unknown> = {
       vector: queryVector,
       namespace: this.namespace,
-      topK: limit,
+      topK,
       includeMetadata: true,
       includeValues: false,
     };
@@ -188,6 +208,7 @@ export class PineconeVectorStore implements VectorStore {
 
     return (result.matches ?? [])
       .filter((m) => m.id !== SCHEMA_SDL_ID)
+      .slice(0, limit)
       .map((match) => {
         const meta = match.metadata;
         return {
