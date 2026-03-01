@@ -24,6 +24,7 @@ All settings are under the `graphqlWorkbench` namespace. Open **Settings** (`Ctr
 | `graphqlWorkbench.minSimilarityScore` | number | `0.4` | 0--1 | Minimum cosine similarity score for vector search results. Lower values return more results but may include less relevant matches. |
 | `graphqlWorkbench.maxDocuments` | number | `50` | 1--200 | Maximum number of documents to retrieve from vector search. |
 | `graphqlWorkbench.maxValidationRetries` | number | `5` | 1--10 | Maximum number of attempts the LLM gets to fix an invalid generated operation before giving up. |
+| `graphqlWorkbench.useEntityExtraction` | boolean | `true` | -- | Before embedding the user's query for vector search, use the LLM to extract concise entities and keywords. This strips filler words and produces more precise similarity matches. Disable to skip this step and embed the raw query directly. |
 
 ## LLM Provider
 
