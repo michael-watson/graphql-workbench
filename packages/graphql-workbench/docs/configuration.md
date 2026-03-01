@@ -11,6 +11,14 @@ All settings are under the `graphqlWorkbench` namespace. Open **Settings** (`Ctr
 | `graphqlWorkbench.pineconeApiKey` | string | `""` | Pinecone API key. Required when `vectorStore` is `"pinecone"`. |
 | `graphqlWorkbench.pineconeIndexHost` | string | `""` | Pinecone index host URL (e.g., `https://my-index-abc123.svc.aped-1234.pinecone.io`). Required when `vectorStore` is `"pinecone"`. The `https://` prefix is added automatically if omitted. |
 
+### Search Recall on Large Schemas
+
+The IVFFlat index used by PGLite and PostgreSQL defaults to `probes = 1`, which scans only ~1 % of the index per query. The extension automatically sets `ivfflat.probes = 10` before every search to scan ~10 % of the index. This prevents the zero-results issue that occurs on large schemas when root-operation fields fall outside the single probed list.
+
+For Pinecone, metadata-filtered queries over-fetch candidates by a factor of 5 (capped at Pinecone's 10,000 `topK` limit) and trim back to the requested count, compensating for pod-based indexes that apply metadata filters after the ANN search.
+
+For PostgreSQL with very large schemas (tens of thousands of documents), further improvements are possible by rebuilding the index with more lists or switching to HNSW. See the [README](../README.md#postgresql) for SQL examples.
+
 ## Embedding Model
 
 | Setting | Type | Default | Description |
