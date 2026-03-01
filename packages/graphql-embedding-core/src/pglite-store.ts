@@ -12,17 +12,29 @@ export interface PGLiteVectorStoreOptions {
   client: PGlite;
   tableName?: string;
   dimensions: number;
+  /**
+   * Number of IVFFlat index lists to probe during search.
+   * Higher values improve recall at the cost of query speed.
+   * With `lists = 100` (the default index setting), probing 10 lists
+   * scans ~10% of the dataset instead of the default 1%, which is
+   * critical for large schemas where root-operation fields may not
+   * appear in the single nearest list.
+   * Default: 10
+   */
+  probes?: number;
 }
 
 export class PGLiteVectorStore implements VectorStore {
   private readonly client: PGlite;
   private readonly tableName: string;
   private readonly dimensions: number;
+  private readonly probes: number;
 
   constructor(options: PGLiteVectorStoreOptions) {
     this.client = options.client;
     this.tableName = options.tableName ?? "graphql_embeddings";
     this.dimensions = options.dimensions;
+    this.probes = options.probes ?? 10;
   }
 
   private get metaTableName(): string {
@@ -90,6 +102,11 @@ export class PGLiteVectorStore implements VectorStore {
     const params: unknown[] = [embeddingStr, limit];
     const whereClauses = this.buildWhereClauses(metadataFilters, columnFilters, params);
     const whereSQL = whereClauses.length > 0 ? `WHERE ${whereClauses.join(" AND ")}` : "";
+
+    // Set ivfflat.probes to improve recall on large schemas. The default
+    // probes=1 only scans ~1% of the IVFFlat index, which can miss
+    // root-operation fields when they don't fall in the single probed list.
+    await this.client.query(`SET ivfflat.probes = ${this.probes}`);
 
     const result = await this.client.query<{
       id: string;

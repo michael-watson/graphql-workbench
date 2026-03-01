@@ -12,17 +12,29 @@ export interface PostgresVectorStoreOptions {
   pool: Pool;
   tableName?: string;
   dimensions: number;
+  /**
+   * Number of IVFFlat index lists to probe during search.
+   * Higher values improve recall at the cost of query speed.
+   * With `lists = 100` (the default index setting), probing 10 lists
+   * scans ~10% of the dataset instead of the default 1%, which is
+   * critical for large schemas where root-operation fields may not
+   * appear in the single nearest list.
+   * Default: 10
+   */
+  probes?: number;
 }
 
 export class PostgresVectorStore implements VectorStore {
   private readonly pool: Pool;
   private readonly tableName: string;
   private readonly dimensions: number;
+  private readonly probes: number;
 
   constructor(options: PostgresVectorStoreOptions) {
     this.pool = options.pool;
     this.tableName = options.tableName ?? "graphql_embeddings";
     this.dimensions = options.dimensions;
+    this.probes = options.probes ?? 10;
   }
 
   private get metaTableName(): string {
@@ -108,38 +120,49 @@ export class PostgresVectorStore implements VectorStore {
     const whereClauses = this.buildWhereClauses(metadataFilters, columnFilters, params);
     const whereSQL = whereClauses.length > 0 ? `WHERE ${whereClauses.join(" AND ")}` : "";
 
-    const result = await this.pool.query<{
-      id: string;
-      type: string;
-      name: string;
-      description: string | null;
-      content: string;
-      metadata: Record<string, unknown>;
-      score: number;
-    }>(
-      `
-      SELECT
-        id, type, name, description, content, metadata,
-        1 - (embedding <=> $1::vector) as score
-      FROM ${this.tableName}
-      ${whereSQL}
-      ORDER BY embedding <=> $1::vector
-      LIMIT $2
-    `,
-      params
-    );
+    // Use a dedicated client so we can set ivfflat.probes for this connection
+    // before the query. The default probes=1 only scans ~1% of the IVFFlat
+    // index, which misses root-operation fields on large schemas. Setting a
+    // higher value (default: 10) dramatically improves recall.
+    const client = await this.pool.connect();
+    try {
+      await client.query(`SET ivfflat.probes = ${this.probes}`);
 
-    return result.rows.map((row) => ({
-      document: {
-        id: row.id,
-        type: row.type as StoredDocument["type"],
-        name: row.name,
-        description: row.description,
-        content: row.content,
-        metadata: row.metadata,
-      },
-      score: row.score,
-    }));
+      const result = await client.query<{
+        id: string;
+        type: string;
+        name: string;
+        description: string | null;
+        content: string;
+        metadata: Record<string, unknown>;
+        score: number;
+      }>(
+        `
+        SELECT
+          id, type, name, description, content, metadata,
+          1 - (embedding <=> $1::vector) as score
+        FROM ${this.tableName}
+        ${whereSQL}
+        ORDER BY embedding <=> $1::vector
+        LIMIT $2
+      `,
+        params
+      );
+
+      return result.rows.map((row) => ({
+        document: {
+          id: row.id,
+          type: row.type as StoredDocument["type"],
+          name: row.name,
+          description: row.description,
+          content: row.content,
+          metadata: row.metadata,
+        },
+        score: row.score,
+      }));
+    } finally {
+      client.release();
+    }
   }
 
   private parseSearchOptions(limitOrOptions?: number | SearchOptions): {
