@@ -162,6 +162,97 @@ export class DynamicOperationGenerator {
   }
 
   /**
+   * Fallback generation path when vector search returns no results.
+   * Calls the MCP Search tool directly, uses the schema context it returns to
+   * generate an operation via LLM, then runs the normal validation loop.
+   */
+  private async generateFromMcpSearch(
+    inputText: string,
+    maxValidationRetries: number
+  ): Promise<DynamicGeneratedOperation> {
+    const mcpClient = this.getMcpClient()!;
+
+    this.log("\n--- MCP FALLBACK: Searching schema via Apollo MCP Server ---");
+    const mcpContext = await mcpClient.search(inputText);
+    this.log(`[MCP] Search returned ${mcpContext.length} chars of schema context`);
+
+    if (!mcpContext.trim()) {
+      throw new Error(
+        "No relevant schema documents found — vector search returned no results and the MCP Search tool returned nothing."
+      );
+    }
+
+    // Generate the operation using the MCP search result as schema context
+    this.log("\n--- MCP FALLBACK: Generating operation from MCP schema context ---");
+    const messages: ChatMessage[] = [
+      {
+        role: "system",
+        content:
+          "Your goal is to generate a valid GraphQL operation and example variables based on the schema context provided. Return the operation in a ```graphql code block and variables in a ```json code block.",
+      },
+      {
+        role: "assistant",
+        content: `Schema context from MCP server:\n${mcpContext}`,
+      },
+      {
+        role: "user",
+        content: `Can you generate me a valid GraphQL operation for: "${inputText}"`,
+      },
+    ];
+
+    const response = await this.callLLMWithMcpTools(messages, {
+      temperature: 0.2,
+      maxTokens: 2000,
+    });
+
+    this.log("\nLLM response (MCP fallback):");
+    this.log(response);
+
+    const operation =
+      this.extractCodeBlock(response, "graphql") ||
+      this.extractCodeBlock(response, "") ||
+      response.trim();
+
+    let variables: Record<string, unknown> = {};
+    const jsonBlock = this.extractCodeBlock(response, "json");
+    if (jsonBlock) {
+      try {
+        variables = JSON.parse(jsonBlock);
+      } catch {
+        // ignore parse failure
+      }
+    }
+
+    this.log("\nGenerated operation (MCP fallback):");
+    this.log(operation);
+
+    // Run the standard validation loop (uses MCP validate or local, same as normal path)
+    this.log("\n--- MCP FALLBACK: Validating operation ---");
+    const { operation: validatedOperation, attempts } = await this.validateAndRetry(
+      operation,
+      [],
+      inputText,
+      maxValidationRetries
+    );
+
+    this.log(`Validation completed after ${attempts} attempt(s)`);
+
+    this.log("\n" + "=".repeat(60));
+    this.log("DYNAMIC OPERATION GENERATION COMPLETED (via MCP fallback)");
+    this.log(`Validation attempts: ${attempts}`);
+    this.log("=".repeat(60));
+
+    return {
+      operation: validatedOperation,
+      variables,
+      operationType: "query",
+      rootField: "",
+      relevantDocuments: [],
+      validationAttempts: attempts,
+    };
+  }
+
+  /**
    * Generate a GraphQL operation from user input using the 14-step process.
    *
    * @param context - Generation context with pre-embedded input vector and original text
@@ -215,6 +306,11 @@ export class DynamicOperationGenerator {
     }
 
     if (searchResults.length === 0) {
+      const mcpClient = this.getMcpClient();
+      if (mcpClient) {
+        this.log(`[MCP] No vector results — short-circuiting to MCP Search with query: "${inputText}"`);
+        return this.generateFromMcpSearch(inputText, maxValidationRetries);
+      }
       this.log(`ERROR: No root fields found even after reducing similarity to ${currentScore.toFixed(2)}`);
       throw new Error(
         "No relevant root fields found in the schema for the given input"
