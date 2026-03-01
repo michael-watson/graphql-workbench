@@ -195,6 +195,21 @@ export async function activate(
   const mcpBinaryManager = new McpBinaryManager(context, outputChannel);
   mcpManager = new McpManager(context, outputChannel, designManager, mcpBinaryManager);
 
+  // Wire Apollo MCP Server URL resolution into EmbeddingManager.
+  // Match designs by their embedded table name (set when the design was embedded)
+  // or by the default table name derived from the configPath.
+  embeddingManager.setMcpServerUrlProvider((tableName) => {
+    for (const design of designManager!.getDesigns()) {
+      const designTableName =
+        design.embeddingTableName ??
+        designManager!.getDefaultTableName(design.configPath);
+      if (designTableName === tableName) {
+        return mcpManager!.getServerUrl(design.configPath);
+      }
+    }
+    return undefined;
+  });
+
   const treeProvider = new DesignTreeProvider(designManager, mcpManager);
   const treeView = vscode.window.createTreeView(
     "schema-design-workbench.designs",

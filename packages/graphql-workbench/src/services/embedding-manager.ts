@@ -198,6 +198,15 @@ export class EmbeddingManager {
   private storeInfo: StoreInfo | undefined;
   private initializedConfig: InitializedConfig | undefined;
   private currentTableName: string = DEFAULT_TABLE_NAME;
+  private getMcpServerUrlForTable?: (tableName: string) => string | undefined;
+
+  /**
+   * Register a callback that resolves the Apollo MCP Server URL for a given
+   * embedding table name. Called from extension.ts after all services are wired up.
+   */
+  setMcpServerUrlProvider(provider: (tableName: string) => string | undefined): void {
+    this.getMcpServerUrlForTable = provider;
+  }
 
   constructor(context: vscode.ExtensionContext, outputChannel: vscode.OutputChannel) {
     this.context = context;
@@ -693,6 +702,12 @@ export class EmbeddingManager {
       this.llmProvider = llmProvider;
       this.log(`LLM provider initialized: ${llmProvider.name} (model: ${llmProvider.model})`);
 
+      // Resolve MCP server URL for the current table (if available)
+      const mcpServerUrl = this.getMcpServerUrlForTable?.(this.currentTableName);
+      if (mcpServerUrl) {
+        this.log(`Apollo MCP Server URL for operation generation: ${mcpServerUrl}`);
+      }
+
       // Create dynamic operation generator (without schema - validation will be parse-only)
       this.dynamicOperationGenerator = new DynamicOperationGenerator({
         llmProvider: llmProvider as any,
@@ -702,6 +717,7 @@ export class EmbeddingManager {
         maxDocuments: config.maxDocuments,
         maxTypeDepth: 5,
         maxValidationRetries: config.maxValidationRetries,
+        mcpServerUrl,
         logger: {
           log: (message: string) => this.log(message),
         },
@@ -820,6 +836,12 @@ export class EmbeddingManager {
       this.llmProvider = llmProvider;
       this.log(`LLM provider initialized: ${llmProvider.name} (model: ${llmProvider.model})`);
 
+      // Resolve MCP server URL for the current table (if available)
+      const mcpServerUrlForEmbed = this.getMcpServerUrlForTable?.(this.currentTableName);
+      if (mcpServerUrlForEmbed) {
+        this.log(`Apollo MCP Server URL for operation generation: ${mcpServerUrlForEmbed}`);
+      }
+
       // Create dynamic operation generator with logger
       this.dynamicOperationGenerator = new DynamicOperationGenerator({
         llmProvider: llmProvider as any,
@@ -829,6 +851,7 @@ export class EmbeddingManager {
         maxDocuments: config.maxDocuments,
         maxTypeDepth: 5,
         maxValidationRetries: config.maxValidationRetries,
+        mcpServerUrl: mcpServerUrlForEmbed,
         logger: {
           log: (message: string) => this.log(message),
         },

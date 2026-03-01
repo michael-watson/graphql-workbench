@@ -1,7 +1,8 @@
 import { parse, validate, type GraphQLSchema, type GraphQLError } from "graphql";
 import type { VectorStore } from "graphql-embedding-core";
 import type { EmbeddingDocument, RootOperationType } from "graphql-embedding-parser";
-import type { LLMProvider, ChatMessage } from "graphql-embedding-core";
+import type { LLMProvider, LLMToolProvider, McpToolDefinition, ChatMessage } from "graphql-embedding-core";
+import { McpClient } from "./mcp-client.js";
 import type {
   DynamicOperationOptions,
   GenerationContext,
@@ -25,6 +26,40 @@ const GRAPHQL_SCALARS = new Set([
  * Generates GraphQL operations dynamically using LLM and vector similarity search.
  * Implements a 14-step process combining embedding-based retrieval with LLM reasoning.
  */
+/** MCP tool definitions exposed to the LLM during operation generation. */
+const MCP_TOOLS: McpToolDefinition[] = [
+  {
+    name: "Search",
+    description:
+      "Search the GraphQL schema for relevant types, fields, and documents by keyword. Use this when you need to find information about specific entities or operations in the schema.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        query: {
+          type: "string",
+          description: "Search query to find relevant schema documents",
+        },
+      },
+      required: ["query"],
+    },
+  },
+  {
+    name: "Introspect",
+    description:
+      "Introspect a specific GraphQL type or field name to get its full schema definition including all fields, arguments, and descriptions.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        query: {
+          type: "string",
+          description: "Type or field name to introspect",
+        },
+      },
+      required: ["query"],
+    },
+  },
+];
+
 export class DynamicOperationGenerator {
   private readonly llmProvider: LLMProvider;
   private readonly vectorStore: VectorStore;
@@ -34,7 +69,9 @@ export class DynamicOperationGenerator {
   private readonly maxValidationRetries: number;
   private readonly schema?: GraphQLSchema;
   private readonly logger?: OperationLogger;
+  private readonly mcpServerUrl?: string;
   private embeddingDimensions = 0;
+  private _mcpClient?: McpClient;
 
   constructor(options: DynamicOperationOptions) {
     this.llmProvider = options.llmProvider;
@@ -45,6 +82,79 @@ export class DynamicOperationGenerator {
     this.maxValidationRetries = options.maxValidationRetries ?? 5;
     this.schema = options.schema;
     this.logger = options.logger;
+    this.mcpServerUrl = options.mcpServerUrl;
+  }
+
+  /** Return a lazily-created McpClient if a server URL is configured. */
+  private getMcpClient(): McpClient | undefined {
+    if (!this.mcpServerUrl) return undefined;
+    if (!this._mcpClient) {
+      this._mcpClient = new McpClient(this.mcpServerUrl);
+    }
+    return this._mcpClient;
+  }
+
+  /**
+   * Route an LLM completion through MCP tool use when available.
+   *
+   * - If the provider implements LLMToolProvider AND an MCP server is configured,
+   *   calls completeWithTools() so the LLM can invoke Search/Introspect as needed.
+   *   Each tool call turn is transparent — it does NOT increment the validation counter.
+   * - Otherwise falls back to the standard complete() call.
+   *
+   * System messages are extracted and passed correctly for each path.
+   */
+  private async callLLMWithMcpTools(
+    messages: ChatMessage[],
+    options?: { temperature?: number; maxTokens?: number }
+  ): Promise<string> {
+    const mcpClient = this.getMcpClient();
+    const toolProvider = (this.llmProvider as unknown as LLMToolProvider);
+
+    if (mcpClient && toolProvider.supportsTools === true) {
+      this.log("[MCP] Using tool-enabled LLM call (Search + Introspect available)");
+      return toolProvider.completeWithTools(
+        messages,
+        MCP_TOOLS,
+        async (name, args) => {
+          const query = (args["query"] as string) ?? "";
+          this.log(`[MCP] LLM called tool: ${name}("${query}")`);
+          if (name === "Search") {
+            const result = await mcpClient.search(query);
+            this.log(`[MCP] Search result length: ${result.length} chars`);
+            return result || "(no results)";
+          }
+          if (name === "Introspect") {
+            const result = await mcpClient.introspect(query);
+            this.log(`[MCP] Introspect result length: ${result.length} chars`);
+            return result || "(no results)";
+          }
+          return `Unknown tool: ${name}`;
+        },
+        options
+      );
+    }
+
+    return this.llmProvider.complete(messages, options);
+  }
+
+  /**
+   * Validate a GraphQL operation via the Apollo MCP Server directly.
+   * Returns null if the MCP server is not configured or unreachable.
+   * Does NOT involve the LLM.
+   */
+  private async validateWithMcp(operation: string): Promise<ValidationResult | null> {
+    const mcpClient = this.getMcpClient();
+    if (!mcpClient) return null;
+
+    this.log("[MCP] Validating operation via Apollo MCP Server...");
+    const result = await mcpClient.validate(operation);
+    if (!result) {
+      this.log("[MCP] MCP server unreachable, falling back to local validation");
+      return null;
+    }
+    this.log(`[MCP] Validation result: ${result.valid ? "VALID" : "INVALID"} (${result.errors.length} errors)`);
+    return result;
   }
 
   private log(message: string): void {
@@ -627,7 +737,7 @@ export class DynamicOperationGenerator {
     this.log(`System prompt: ${systemPrompt}`);
     this.log(`User prompt: ${userPrompt}`);
 
-    const response = await this.llmProvider.complete(messages, {
+    const response = await this.callLLMWithMcpTools(messages, {
       temperature: 0.2,
       maxTokens: 2000,
     });
@@ -682,7 +792,17 @@ export class DynamicOperationGenerator {
 
     while (attempts <= maxValidationRetries) {
       this.log(`\nValidation attempt ${attempts}/${maxValidationRetries}`);
-      const validation = this.validateOperation(currentOperation);
+
+      // Prefer MCP validation (direct, no LLM), fall back to local parse/validate
+      let validation: ValidationResult;
+      const mcpResult = await this.validateWithMcp(currentOperation);
+      if (mcpResult !== null) {
+        validation = mcpResult;
+        this.log(`[MCP] Validation used: Apollo MCP Server`);
+      } else {
+        validation = this.validateOperation(currentOperation);
+        this.log(`[Local] Validation used: local GraphQL parser/validator`);
+      }
 
       if (validation.valid) {
         this.log("Validation PASSED");
@@ -699,7 +819,7 @@ export class DynamicOperationGenerator {
         break;
       }
 
-      // Try to fix errors with LLM
+      // Try to fix errors with LLM (tool-enabled when MCP is available)
       this.log("Attempting to fix errors via LLM...");
       currentOperation = await this.fixOperationErrors(
         currentOperation,
@@ -790,7 +910,7 @@ Please fix the operation and return only the corrected GraphQL operation.`;
 
     this.log(`Sending fix request to LLM with ${context.length} schema documents`);
 
-    const response = await this.llmProvider.complete(messages, {
+    const response = await this.callLLMWithMcpTools(messages, {
       temperature: 0.1,
       maxTokens: 2000,
     });

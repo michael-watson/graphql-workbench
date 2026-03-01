@@ -22,6 +22,37 @@ export interface LLMCompletionOptions {
 }
 
 /**
+ * A tool definition for LLM tool calling (MCP tools exposed to the model).
+ */
+export interface McpToolDefinition {
+  name: string;
+  description: string;
+  /** JSON Schema object describing the tool's input parameters */
+  inputSchema: Record<string, unknown>;
+}
+
+/**
+ * Optional mixin interface for LLM providers that support native tool calling.
+ * Currently implemented by AnthropicProvider.
+ * Detected at runtime via: (provider as unknown as LLMToolProvider).supportsTools === true
+ */
+export interface LLMToolProvider {
+  readonly supportsTools: true;
+  /**
+   * Run a completion with tool use. Internally loops until the model stops
+   * issuing tool calls, calling onToolCall for each invocation.
+   * Tool call turns are internal — they do NOT surface as separate iterations
+   * to the caller.
+   */
+  completeWithTools(
+    messages: ChatMessage[],
+    tools: McpToolDefinition[],
+    onToolCall: (name: string, args: Record<string, unknown>) => Promise<string>,
+    options?: LLMCompletionOptions
+  ): Promise<string>;
+}
+
+/**
  * Interface for LLM providers used in dynamic operation generation.
  * Implementations should handle their own HTTP communication using fetch().
  */

@@ -1,4 +1,4 @@
-import type { LLMProvider, ChatMessage, LLMCompletionOptions } from "../types.js";
+import type { LLMProvider, LLMToolProvider, McpToolDefinition, ChatMessage, LLMCompletionOptions } from "../types.js";
 
 /**
  * Options for configuring the Anthropic provider
@@ -58,13 +58,65 @@ interface AnthropicErrorResponse {
   };
 }
 
+// --- Tool calling types ---
+
+interface AnthropicTool {
+  name: string;
+  description: string;
+  input_schema: Record<string, unknown>;
+}
+
+interface AnthropicToolRequest {
+  model: string;
+  max_tokens: number;
+  messages: unknown[];
+  tools: AnthropicTool[];
+  system?: string;
+  temperature?: number;
+  top_k?: number;
+  top_p?: number;
+}
+
+interface AnthropicToolUseBlock {
+  type: "tool_use";
+  id: string;
+  name: string;
+  input: Record<string, unknown>;
+}
+
+interface AnthropicTextBlock {
+  type: "text";
+  text: string;
+}
+
+interface AnthropicToolResultBlock {
+  type: "tool_result";
+  tool_use_id: string;
+  content: string;
+}
+
+interface AnthropicToolMessage {
+  role: "user";
+  content: AnthropicToolResultBlock[];
+}
+
+interface AnthropicToolResponse {
+  id: string;
+  type: string;
+  role: string;
+  content: Array<AnthropicTextBlock | AnthropicToolUseBlock>;
+  stop_reason: "end_turn" | "tool_use" | string;
+  usage: { input_tokens: number; output_tokens: number };
+}
+
 /**
  * LLM provider implementation for Anthropic API.
  * Note: Anthropic's API has a different message format - system messages
  * are passed separately, not in the messages array.
  */
-export class AnthropicProvider implements LLMProvider {
+export class AnthropicProvider implements LLMProvider, LLMToolProvider {
   readonly name = "anthropic";
+  readonly supportsTools = true as const;
   readonly model: string;
   private readonly apiKey: string;
   private readonly baseUrl: string;
@@ -172,6 +224,142 @@ export class AnthropicProvider implements LLMProvider {
     }
 
     return data.content[0].text;
+  }
+
+  /**
+   * Run a completion with MCP tool use support.
+   * Internally loops calling tools until the model emits end_turn.
+   * Tool call rounds are transparent to the caller — they do not surface
+   * as separate "validation iterations" in the generation loop.
+   *
+   * Max 10 internal tool-call turns to prevent runaway loops.
+   */
+  async completeWithTools(
+    messages: ChatMessage[],
+    tools: McpToolDefinition[],
+    onToolCall: (name: string, args: Record<string, unknown>) => Promise<string>,
+    options?: LLMCompletionOptions
+  ): Promise<string> {
+    // Extract system message (Anthropic handles it separately)
+    let systemMessage: string | undefined;
+    const chatMessages: AnthropicMessage[] = [];
+
+    for (const msg of messages) {
+      if (msg.role === "system") {
+        systemMessage = systemMessage
+          ? `${systemMessage}\n\n${msg.content}`
+          : msg.content;
+      } else {
+        chatMessages.push({
+          role: msg.role as "user" | "assistant",
+          content: msg.content,
+        });
+      }
+    }
+
+    const normalizedMessages = this.normalizeMessages(chatMessages);
+
+    // Convert tool definitions to Anthropic format
+    const anthropicTools: AnthropicTool[] = tools.map((t) => ({
+      name: t.name,
+      description: t.description,
+      input_schema: t.inputSchema,
+    }));
+
+    // Mutable message list for the agentic loop
+    // We use a relaxed type here to accommodate tool result messages
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const runMessages: any[] = [...normalizedMessages];
+
+    const temperature = options?.temperature ?? this.defaultTemperature;
+    const maxToolTurns = 10;
+    let toolTurns = 0;
+
+    while (toolTurns < maxToolTurns) {
+      const requestBody: AnthropicToolRequest = {
+        model: this.model,
+        max_tokens: options?.maxTokens ?? this.defaultMaxTokens,
+        messages: runMessages,
+        tools: anthropicTools,
+      };
+
+      if (systemMessage) {
+        requestBody.system = systemMessage;
+      }
+      if (temperature !== undefined) {
+        requestBody.temperature = temperature;
+      }
+      if (this.topK !== undefined) {
+        requestBody.top_k = this.topK;
+      }
+      if (this.topP !== undefined) {
+        requestBody.top_p = this.topP;
+      }
+
+      const response = await fetch(`${this.baseUrl}/v1/messages`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": this.apiKey,
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      if (!response.ok) {
+        const errorData = (await response.json()) as AnthropicErrorResponse;
+        throw new Error(
+          `Anthropic API error: ${errorData.error?.message ?? response.statusText}`
+        );
+      }
+
+      const data = (await response.json()) as AnthropicToolResponse;
+
+      if (data.stop_reason === "end_turn") {
+        // Extract text from final response
+        const textBlock = data.content.find(
+          (b): b is AnthropicTextBlock => b.type === "text"
+        );
+        return textBlock?.text ?? "";
+      }
+
+      if (data.stop_reason === "tool_use") {
+        toolTurns++;
+
+        // Append assistant response to message history
+        runMessages.push({ role: "assistant", content: data.content });
+
+        // Execute all tool calls and collect results
+        const toolResults: AnthropicToolResultBlock[] = [];
+        for (const block of data.content) {
+          if (block.type === "tool_use") {
+            const toolUse = block as AnthropicToolUseBlock;
+            const result = await onToolCall(toolUse.name, toolUse.input);
+            toolResults.push({
+              type: "tool_result",
+              tool_use_id: toolUse.id,
+              content: result,
+            });
+          }
+        }
+
+        // Append tool results as user message
+        const toolMessage: AnthropicToolMessage = {
+          role: "user",
+          content: toolResults,
+        };
+        runMessages.push(toolMessage);
+        continue;
+      }
+
+      // Unexpected stop reason — return whatever text we have
+      const textBlock = data.content.find(
+        (b): b is AnthropicTextBlock => b.type === "text"
+      );
+      return textBlock?.text ?? "";
+    }
+
+    throw new Error(`Max tool call turns (${maxToolTurns}) exceeded`);
   }
 
   /**

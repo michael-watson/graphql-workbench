@@ -30,6 +30,13 @@ export interface DynamicOperationOptions {
   schema?: GraphQLSchema;
   /** Optional logger for detailed step-by-step logging */
   logger?: OperationLogger;
+  /**
+   * URL of a locally running Apollo MCP Server (e.g. "http://127.0.0.1:9001/mcp").
+   * When provided:
+   *  - The LLM can call Search and Introspect tools during generation/fixing.
+   *  - Validation uses the MCP Validate tool directly (no LLM involved).
+   */
+  mcpServerUrl?: string;
 }
 
 /**

@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "last_spec_id": 4,
+  "last_spec_id": 5,
   "specs": [
     {
       "id": "000001",
@@ -28,8 +28,14 @@
       "title": "llm-entity-extraction-for-vector-search",
       "status": "unimplemented",
       "created_at": "2026-02-28T00:00:00Z"
+    },
+    {
+      "id": "000005",
+      "title": "apollo-mcp-tools-in-operation-loop",
+      "status": "unimplemented",
+      "created_at": "2026-02-28T00:00:00Z"
     }
   ],
   "created_at": "2026-02-11T00:00:00Z",
-  "updated_at": "2026-02-28T00:00:00Z"
+  "updated_at": "2026-02-28T01:00:00Z"
 }

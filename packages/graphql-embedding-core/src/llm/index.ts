@@ -3,6 +3,8 @@ export type {
   ChatMessage,
   LLMCompletionOptions,
   LLMProvider,
+  LLMToolProvider,
+  McpToolDefinition,
 } from "./types.js";
 
 export {
