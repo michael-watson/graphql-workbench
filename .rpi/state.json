@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "last_spec_id": 1,
+  "last_spec_id": 6,
   "specs": [
     {
       "id": "000001",
@@ -8,8 +8,34 @@
       "status": "completed",
       "created_at": "2026-02-15T03:36:32Z",
       "completed_at": "2026-02-15T03:36:32Z"
+    },
+    {
+      "id": "000002",
+      "title": "apollo-mcp-server-integration",
+      "status": "completed",
+      "created_at": "2026-02-28T00:00:00Z",
+      "completed_at": "2026-02-28T00:00:00Z"
+    },
+    {
+      "id": "000003",
+      "title": "apollo-mcp-server-documentation",
+      "status": "completed",
+      "created_at": "2026-02-28T00:00:00Z",
+      "completed_at": "2026-02-28T00:00:00Z"
+    },
+    {
+      "id": "000004",
+      "title": "llm-entity-extraction-for-vector-search",
+      "status": "unimplemented",
+      "created_at": "2026-02-28T00:00:00Z"
+    },
+    {
+      "id": "000005",
+      "title": "apollo-mcp-tools-in-operation-loop",
+      "status": "unimplemented",
+      "created_at": "2026-02-28T00:00:00Z"
     }
   ],
   "created_at": "2026-02-11T00:00:00Z",
-  "updated_at": "2026-02-15T03:36:32Z"
+  "updated_at": "2026-02-28T01:00:00Z"
 }

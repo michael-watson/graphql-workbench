@@ -142,6 +142,26 @@
       {
         "command": "graphql-workbench.embeddingStatusClick",
         "title": "Embed Schema"
+      },
+      {
+        "command": "graphql-workbench.startMcpServer",
+        "title": "Start MCP Server"
+      },
+      {
+        "command": "graphql-workbench.stopMcpServer",
+        "title": "Stop MCP Server"
+      },
+      {
+        "command": "graphql-workbench.enableMcpServer",
+        "title": "Enable MCP Server"
+      },
+      {
+        "command": "graphql-workbench.disableMcpServer",
+        "title": "Disable MCP Server"
+      },
+      {
+        "command": "graphql-workbench.downloadMcpBinary",
+        "title": "GraphQL Workbench: Download Apollo MCP Server"
       }
     ],
     "viewsContainers": {
@@ -273,6 +293,11 @@
           "maximum": 10,
           "description": "Maximum attempts to fix invalid generated operations"
         },
+        "graphqlWorkbench.useEntityExtraction": {
+          "type": "boolean",
+          "default": true,
+          "description": "Use LLM to extract entities and keywords from search queries before embedding. Produces more precise vector search results by stripping filler words."
+        },
         "graphqlWorkbench.enableDesignWorkbench": {
           "type": "boolean",
           "default": true,
@@ -287,6 +312,11 @@
           "type": "boolean",
           "default": true,
           "description": "Automatically validate schema designs on save"
+        },
+        "graphqlWorkbench.enableMcpServer": {
+          "type": "boolean",
+          "default": true,
+          "description": "Start an Apollo MCP Server for each design with a passing schema. Servers are accessible at http://127.0.0.1:9001/mcp (and incrementing ports for additional designs). Requires the Apollo MCP Server binary (use 'GraphQL Workbench: Download Apollo MCP Server' to download)."
         }
       }
     },
@@ -346,6 +376,22 @@
         },
         {
           "command": "graphql-workbench.embeddingStatusClick",
+          "when": "false"
+        },
+        {
+          "command": "graphql-workbench.startMcpServer",
+          "when": "false"
+        },
+        {
+          "command": "graphql-workbench.stopMcpServer",
+          "when": "false"
+        },
+        {
+          "command": "graphql-workbench.enableMcpServer",
+          "when": "false"
+        },
+        {
+          "command": "graphql-workbench.disableMcpServer",
           "when": "false"
         }
       ],
@@ -479,6 +525,26 @@
           "command": "graphql-workbench.deleteSubgraph",
           "when": "view == schema-design-workbench.designs && viewItem == subgraph",
           "group": "2_danger"
+        },
+        {
+          "command": "graphql-workbench.startMcpServer",
+          "when": "view == schema-design-workbench.designs && viewItem == mcp-status-stopped",
+          "group": "1_mcp@1"
+        },
+        {
+          "command": "graphql-workbench.stopMcpServer",
+          "when": "view == schema-design-workbench.designs && viewItem == mcp-status-running",
+          "group": "1_mcp@1"
+        },
+        {
+          "command": "graphql-workbench.disableMcpServer",
+          "when": "view == schema-design-workbench.designs && (viewItem == mcp-status-running || viewItem == mcp-status-stopped)",
+          "group": "2_mcp@1"
+        },
+        {
+          "command": "graphql-workbench.enableMcpServer",
+          "when": "view == schema-design-workbench.designs && viewItem == mcp-status-disabled",
+          "group": "2_mcp@1"
         }
       ]
     }

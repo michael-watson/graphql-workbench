@@ -4,6 +4,8 @@ import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import type { DesignManager } from "../services/design-manager";
 import type { DesignTreeItem } from "../providers/design-tree-items";
 import type { EmbeddingManager } from "../services/embedding-manager";
+import type { McpManager } from "../services/mcp-manager";
+import type { McpBinaryManager } from "../services/mcp-binary-manager";
 import {
   composeSupergraphSchema,
   composeApiSchema,
@@ -866,4 +868,38 @@ export async function embeddingStatusClickCommand(
     await embedDesignCommand(designManager, embeddingManager, item);
   }
   // If already embedded, clicking does nothing (use context menu for actions)
+}
+
+export async function startMcpServerCommand(
+  mcpManager: McpManager,
+  item: DesignTreeItem
+): Promise<void> {
+  await mcpManager.startServer(item.designPath);
+}
+
+export async function stopMcpServerCommand(
+  mcpManager: McpManager,
+  item: DesignTreeItem
+): Promise<void> {
+  await mcpManager.stopServer(item.designPath);
+}
+
+export async function enableMcpServerCommand(
+  mcpManager: McpManager,
+  item: DesignTreeItem
+): Promise<void> {
+  await mcpManager.enableDesign(item.designPath);
+}
+
+export async function disableMcpServerCommand(
+  mcpManager: McpManager,
+  item: DesignTreeItem
+): Promise<void> {
+  await mcpManager.disableDesign(item.designPath);
+}
+
+export async function downloadMcpBinaryCommand(
+  binaryManager: McpBinaryManager
+): Promise<void> {
+  await binaryManager.downloadBinary();
 }

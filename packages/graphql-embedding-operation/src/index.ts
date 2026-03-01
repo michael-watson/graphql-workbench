@@ -1,4 +1,6 @@
 export { DynamicOperationGenerator } from "./dynamic-generator.js";
+export { McpClient } from "./mcp-client.js";
+export type { McpValidationResult } from "./mcp-client.js";
 export type {
   DynamicOperationOptions,
   GenerationContext,

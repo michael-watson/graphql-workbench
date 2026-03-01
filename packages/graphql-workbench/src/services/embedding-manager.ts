@@ -170,6 +170,10 @@ export interface PlaygroundResult {
   searchResults: PlaygroundSearchResultItem[];
   operationType: string | null;
   selectedField: PlaygroundSelectedField | null;
+  relatedTypes?: Array<{ name: string; type: string; content: string }>;
+  operation?: string;
+  variables?: Record<string, unknown>;
+  validationAttempts?: number;
   settings: {
     minSimilarityScore: number;
     maxDocuments: number;
@@ -177,7 +181,16 @@ export interface PlaygroundResult {
 }
 
 export interface PlaygroundStep {
-  step: "searchResults" | "operationType" | "selectedField";
+  step:
+    | "extractedQuery"
+    | "searchResults"
+    | "operationType"
+    | "selectedField"
+    | "relatedTypes"
+    | "generatingOperation"
+    | "toolCall"
+    | "validationAttempt"
+    | "operationComplete";
   data: Record<string, unknown>;
 }
 
@@ -191,6 +204,7 @@ export class EmbeddingManager {
   private dynamicOperationGenerator: DynamicOperationGeneratorInstance | undefined;
   private lastDynamicGeneratorInitError: string | undefined;
   private llmProvider: LLMProviderInstance | undefined;
+  private _playgroundOnProgress: ((step: PlaygroundStep) => void) | undefined;
   private pglite: unknown;
   private pgPool: Pool | undefined;
   private initialized = false;
@@ -198,6 +212,15 @@ export class EmbeddingManager {
   private storeInfo: StoreInfo | undefined;
   private initializedConfig: InitializedConfig | undefined;
   private currentTableName: string = DEFAULT_TABLE_NAME;
+  private getMcpServerUrlForTable?: (tableName: string) => string | undefined;
+
+  /**
+   * Register a callback that resolves the Apollo MCP Server URL for a given
+   * embedding table name. Called from extension.ts after all services are wired up.
+   */
+  setMcpServerUrlProvider(provider: (tableName: string) => string | undefined): void {
+    this.getMcpServerUrlForTable = provider;
+  }
 
   constructor(context: vscode.ExtensionContext, outputChannel: vscode.OutputChannel) {
     this.context = context;
@@ -257,6 +280,7 @@ export class EmbeddingManager {
       minSimilarityScore: config.get<number>("minSimilarityScore", 0.4),
       maxDocuments: config.get<number>("maxDocuments", 50),
       maxValidationRetries: config.get<number>("maxValidationRetries", 5),
+      useEntityExtraction: config.get<boolean>("useEntityExtraction", true),
     };
   }
 
@@ -692,6 +716,12 @@ export class EmbeddingManager {
       this.llmProvider = llmProvider;
       this.log(`LLM provider initialized: ${llmProvider.name} (model: ${llmProvider.model})`);
 
+      // Resolve MCP server URL for the current table (if available)
+      const mcpServerUrl = this.getMcpServerUrlForTable?.(this.currentTableName);
+      if (mcpServerUrl) {
+        this.log(`Apollo MCP Server URL for operation generation: ${mcpServerUrl}`);
+      }
+
       // Create dynamic operation generator (without schema - validation will be parse-only)
       this.dynamicOperationGenerator = new DynamicOperationGenerator({
         llmProvider: llmProvider as any,
@@ -701,8 +731,27 @@ export class EmbeddingManager {
         maxDocuments: config.maxDocuments,
         maxTypeDepth: 5,
         maxValidationRetries: config.maxValidationRetries,
+        mcpServerUrl,
         logger: {
           log: (message: string) => this.log(message),
+          onToolCall: (toolName: string, query: string) => {
+            this._playgroundOnProgress?.({
+              step: "toolCall",
+              data: { toolName, query, status: "calling" },
+            });
+          },
+          onToolResult: (toolName: string, resultLength: number) => {
+            this._playgroundOnProgress?.({
+              step: "toolCall",
+              data: { toolName, resultLength, status: "complete" },
+            });
+          },
+          onValidationAttempt: (attempt: number, maxAttempts: number, valid: boolean, errors: string[], operation: string) => {
+            this._playgroundOnProgress?.({
+              step: "validationAttempt",
+              data: { attempt, maxAttempts, valid, errors, operation },
+            });
+          },
         },
       });
       this.log("Dynamic operation generator initialized (without schema validation)");
@@ -819,6 +868,12 @@ export class EmbeddingManager {
       this.llmProvider = llmProvider;
       this.log(`LLM provider initialized: ${llmProvider.name} (model: ${llmProvider.model})`);
 
+      // Resolve MCP server URL for the current table (if available)
+      const mcpServerUrlForEmbed = this.getMcpServerUrlForTable?.(this.currentTableName);
+      if (mcpServerUrlForEmbed) {
+        this.log(`Apollo MCP Server URL for operation generation: ${mcpServerUrlForEmbed}`);
+      }
+
       // Create dynamic operation generator with logger
       this.dynamicOperationGenerator = new DynamicOperationGenerator({
         llmProvider: llmProvider as any,
@@ -828,6 +883,7 @@ export class EmbeddingManager {
         maxDocuments: config.maxDocuments,
         maxTypeDepth: 5,
         maxValidationRetries: config.maxValidationRetries,
+        mcpServerUrl: mcpServerUrlForEmbed,
         logger: {
           log: (message: string) => this.log(message),
         },
@@ -1129,6 +1185,47 @@ export class EmbeddingManager {
   }
 
   /**
+   * Use the LLM to extract entities and keywords from a natural language query.
+   * Returns a condensed string of terms in original order, for use as the embedding input.
+   * Falls back to the raw query if the LLM is unavailable or extraction fails.
+   */
+  private async extractSearchTerms(query: string): Promise<string> {
+    if (!this.llmProvider) {
+      return query;
+    }
+
+    const prompt = `You are a keyword and entity extractor. Extract the key entities, field names, and search terms from the user's GraphQL search query. Return ONLY the extracted terms as a space-separated string, preserving the original order they appear. Remove filler words (get, all, with, their, find, show, me, the, a, an, of, for, by, and, or). Do not add new words not in the original query. Do not explain.
+
+Examples:
+Input: "get all users with their recent posts and profile pictures"
+Output: users recent posts profile pictures
+
+Input: "find products by category with price range"
+Output: products category price range
+
+Input: "show me the order details for a specific customer"
+Output: order details customer
+
+Input: "create a new user account with email and password"
+Output: user account email password
+
+Now extract from:
+Input: "${query.replace(/"/g, '\\"')}"
+Output:`;
+
+    try {
+      const response = await (this.llmProvider as any).complete(
+        [{ role: "user", content: prompt }],
+        { temperature: 0.0, maxTokens: 100 }
+      );
+      const extracted = response.trim();
+      return extracted.length > 0 ? extracted : query;
+    } catch {
+      return query;
+    }
+  }
+
+  /**
    * Run the vector search playground pipeline step-by-step.
    * Returns intermediate results for each stage of dynamic operation generation.
    */
@@ -1161,11 +1258,28 @@ export class EmbeddingManager {
     const config = this.getConfig();
     const generator = this.dynamicOperationGenerator as any;
 
-    // Step 1: Embed query
-    this.log(`[Playground] Embedding query: "${query}"`);
-    const inputVector = await this.embeddingProvider.embed(query);
+    // Step 1: Extract entities/keywords from query via LLM (if enabled)
+    let searchQuery = query;
+    if (config.useEntityExtraction) {
+      this.log(`[Playground] Extracting entities/keywords from query: "${query}"`);
+      searchQuery = await this.extractSearchTerms(query);
+      this.log(`[Playground] Extracted search terms: "${searchQuery}"`);
+    }
 
-    // Step 2: Vector search for root fields
+    onProgress?.({
+      step: "extractedQuery",
+      data: {
+        originalQuery: query,
+        extractedQuery: searchQuery,
+        extractionEnabled: config.useEntityExtraction,
+      },
+    });
+
+    // Step 2: Embed extracted query
+    this.log(`[Playground] Embedding query: "${searchQuery}"`);
+    const inputVector = await this.embeddingProvider.embed(searchQuery);
+
+    // Step 3: Vector search for root fields
     this.log(`[Playground] Searching root fields (minSim=${config.minSimilarityScore}, maxDocs=${config.maxDocuments})`);
     const searchResults = await generator.searchRootFieldsOnly(
       inputVector,
@@ -1205,7 +1319,7 @@ export class EmbeddingManager {
       };
     }
 
-    // Step 3: Determine operation type via LLM
+    // Step 4: Determine operation type via LLM
     this.log("[Playground] Determining operation type...");
     const operationType = await generator.determineOperationType(
       searchResults,
@@ -1218,9 +1332,10 @@ export class EmbeddingManager {
       data: { operationType },
     });
 
-    // Step 4: Select root field via LLM
+    // Step 5: Select root field via LLM
     this.log("[Playground] Selecting root field...");
     let selectedField = null;
+    let rawSelectedField: unknown = null;
     try {
       const { field, filteredResults } = await generator.selectRootField(
         searchResults,
@@ -1228,6 +1343,7 @@ export class EmbeddingManager {
         query
       );
 
+      rawSelectedField = field;
       selectedField = {
         id: field.id,
         name: field.name,
@@ -1253,12 +1369,111 @@ export class EmbeddingManager {
         step: "selectedField",
         data: { selectedField: null, error: message },
       });
+      return {
+        searchResults: searchResultsPayload,
+        operationType,
+        selectedField: null,
+        settings: {
+          minSimilarityScore: config.minSimilarityScore,
+          maxDocuments: config.maxDocuments,
+        },
+      };
+    }
+
+    if (!selectedField || !rawSelectedField) {
+      return {
+        searchResults: searchResultsPayload,
+        operationType,
+        selectedField: null,
+        settings: {
+          minSimilarityScore: config.minSimilarityScore,
+          maxDocuments: config.maxDocuments,
+        },
+      };
+    }
+
+    const rawField = rawSelectedField as any;
+
+    // Wire up playground progress so generator logger forwards tool calls / validation steps
+    this._playgroundOnProgress = onProgress;
+
+    let relatedTypesPayload: Array<{ name: string; type: string; content: string }> = [];
+    let operation = "";
+    let variables: Record<string, unknown> = {};
+    let validationAttempts = 0;
+
+    try {
+      // Step 6: Discover related types recursively (Step 9 of 14-step process)
+      this.log("[Playground] Discovering related types...");
+
+      const relatedTypes = await generator.discoverRelatedTypes(rawField);
+      this.log(`[Playground] Discovered ${relatedTypes.length} related types`);
+
+      relatedTypesPayload = relatedTypes.map((t: any) => ({
+        name: t.name,
+        type: t.type ?? t.metadata?.type ?? "",
+        content: t.content,
+      }));
+
+      onProgress?.({
+        step: "relatedTypes",
+        data: { types: relatedTypesPayload },
+      });
+
+      // Step 7: Generate operation with LLM (Step 10 of 14-step process)
+      // Tool calls (Search/Introspect) may occur here — forwarded via logger callbacks
+      this.log("[Playground] Generating operation with LLM...");
+      onProgress?.({
+        step: "generatingOperation",
+        data: {},
+      });
+
+      const generated = await generator.generateOperationWithLLM(
+        rawField,
+        relatedTypes,
+        query
+      );
+      operation = generated.operation;
+      variables = generated.variables;
+
+      this.log("[Playground] Operation generated, starting validation loop...");
+
+      // Step 8: Validate and retry (Steps 11-13 of 14-step process)
+      // Each attempt is surfaced via logger.onValidationAttempt → toolCall/validationAttempt steps
+      const result = await generator.validateAndRetry(
+        operation,
+        [rawField, ...relatedTypes],
+        query,
+        config.maxValidationRetries
+      );
+      operation = result.operation;
+      validationAttempts = result.attempts;
+
+      this.log(`[Playground] Operation complete after ${validationAttempts} validation attempt(s)`);
+
+      onProgress?.({
+        step: "operationComplete",
+        data: { operation, variables, validationAttempts },
+      });
+    } catch (genError) {
+      const message = genError instanceof Error ? genError.message : String(genError);
+      this.log(`[Playground] Operation generation failed: ${message}`);
+      onProgress?.({
+        step: "operationComplete",
+        data: { operation: null, error: message, validationAttempts },
+      });
+    } finally {
+      this._playgroundOnProgress = undefined;
     }
 
     return {
       searchResults: searchResultsPayload,
       operationType,
       selectedField,
+      relatedTypes: relatedTypesPayload,
+      operation: operation || undefined,
+      variables: Object.keys(variables).length > 0 ? variables : undefined,
+      validationAttempts,
       settings: {
         minSimilarityScore: config.minSimilarityScore,
         maxDocuments: config.maxDocuments,

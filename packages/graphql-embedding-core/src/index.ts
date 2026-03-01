@@ -29,6 +29,8 @@ export type {
   ChatMessage,
   LLMCompletionOptions,
   LLMProvider,
+  LLMToolProvider,
+  McpToolDefinition,
 } from "./llm/index.js";
 
 // LLM provider implementations

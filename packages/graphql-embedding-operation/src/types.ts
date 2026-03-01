@@ -8,6 +8,12 @@ import type { LLMProvider } from "graphql-embedding-core";
  */
 export interface OperationLogger {
   log(message: string): void;
+  /** Called when the LLM invokes an MCP tool (Search or Introspect) */
+  onToolCall?(toolName: string, query: string): void;
+  /** Called when an MCP tool call returns a result */
+  onToolResult?(toolName: string, resultLength: number): void;
+  /** Called after each validation attempt in the retry loop */
+  onValidationAttempt?(attempt: number, maxAttempts: number, valid: boolean, errors: string[], operation: string): void;
 }
 
 /**
@@ -30,6 +36,13 @@ export interface DynamicOperationOptions {
   schema?: GraphQLSchema;
   /** Optional logger for detailed step-by-step logging */
   logger?: OperationLogger;
+  /**
+   * URL of a locally running Apollo MCP Server (e.g. "http://127.0.0.1:9001/mcp").
+   * When provided:
+   *  - The LLM can call Search and Introspect tools during generation/fixing.
+   *  - Validation uses the MCP Validate tool directly (no LLM involved).
+   */
+  mcpServerUrl?: string;
 }
 
 /**
