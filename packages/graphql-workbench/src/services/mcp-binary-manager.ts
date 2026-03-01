@@ -110,11 +110,7 @@ export class McpBinaryManager {
 
           const binaryPath = this.getBinaryPath();
           if (!fs.existsSync(binaryPath)) {
-            // Try to find the binary in subdirectories (some archives nest binaries)
-            const found = await this.findBinaryInDir(this.binDir);
-            if (found) {
-              await fs.promises.rename(found, binaryPath);
-            }
+            throw new Error(`Binary not found at expected path after extraction: ${binaryPath}`);
           }
 
           // Make executable on Unix
@@ -231,7 +227,7 @@ export class McpBinaryManager {
     return new Promise((resolve, reject) => {
       child_process.execFile(
         "tar",
-        ["xzf", archivePath, "-C", outputDir, "--strip-components=0"],
+        ["xzf", archivePath, "-C", outputDir, "--strip-components=1"],
         { timeout: 60000 },
         (error) => {
           if (error) {
@@ -244,13 +240,4 @@ export class McpBinaryManager {
     });
   }
 
-  private async findBinaryInDir(dir: string): Promise<string | null> {
-    const entries = await fs.promises.readdir(dir, { withFileTypes: true });
-    for (const entry of entries) {
-      if (entry.isFile() && entry.name.startsWith("apollo-mcp-server")) {
-        return path.join(dir, entry.name);
-      }
-    }
-    return null;
-  }
 }

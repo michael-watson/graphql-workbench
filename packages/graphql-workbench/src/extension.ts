@@ -38,8 +38,10 @@ import {
   clearDesignEmbeddingsCommand,
   reEmbedDesignCommand,
   embeddingStatusClickCommand,
-  toggleMcpServerCommand,
-  restartMcpServerCommand,
+  startMcpServerCommand,
+  stopMcpServerCommand,
+  enableMcpServerCommand,
+  disableMcpServerCommand,
   downloadMcpBinaryCommand,
 } from "./commands/design-workbench-commands";
 import type { DesignTreeItem } from "./providers/design-tree-items";
@@ -353,17 +355,31 @@ export async function activate(
     }
   );
 
-  const toggleMcpServer = vscode.commands.registerCommand(
-    "graphql-workbench.toggleMcpServer",
+  const startMcpServer = vscode.commands.registerCommand(
+    "graphql-workbench.startMcpServer",
     async (item: DesignTreeItem) => {
-      await toggleMcpServerCommand(mcpManager!, item);
+      await startMcpServerCommand(mcpManager!, item);
     }
   );
 
-  const restartMcpServer = vscode.commands.registerCommand(
-    "graphql-workbench.restartMcpServer",
+  const stopMcpServer = vscode.commands.registerCommand(
+    "graphql-workbench.stopMcpServer",
     async (item: DesignTreeItem) => {
-      await restartMcpServerCommand(mcpManager!, item);
+      await stopMcpServerCommand(mcpManager!, item);
+    }
+  );
+
+  const enableMcpServer = vscode.commands.registerCommand(
+    "graphql-workbench.enableMcpServer",
+    async (item: DesignTreeItem) => {
+      await enableMcpServerCommand(mcpManager!, item);
+    }
+  );
+
+  const disableMcpServer = vscode.commands.registerCommand(
+    "graphql-workbench.disableMcpServer",
+    async (item: DesignTreeItem) => {
+      await disableMcpServerCommand(mcpManager!, item);
     }
   );
 
@@ -394,8 +410,10 @@ export async function activate(
     clearDesignEmbeddings,
     reEmbedDesign,
     embeddingStatusClick,
-    toggleMcpServer,
-    restartMcpServer,
+    startMcpServer,
+    stopMcpServer,
+    enableMcpServer,
+    disableMcpServer,
     downloadMcpBinary
   );
 

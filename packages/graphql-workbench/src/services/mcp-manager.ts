@@ -31,17 +31,17 @@ export class McpManager {
     private readonly context: vscode.ExtensionContext,
     private readonly output: vscode.OutputChannel,
     private readonly designManager: DesignManager,
-    private readonly binaryManager: McpBinaryManager
+    private readonly binaryManager: McpBinaryManager,
   ) {
     this.configsDir = path.join(
       context.globalStorageUri.fsPath,
       "mcp",
-      "configs"
+      "configs",
     );
     this.schemasDir = path.join(
       context.globalStorageUri.fsPath,
       "mcp",
-      "schemas"
+      "schemas",
     );
   }
 
@@ -49,7 +49,7 @@ export class McpManager {
     // Restore persisted state
     const savedPorts = this.context.globalState.get<Record<string, number>>(
       "mcpPortAssignments",
-      {}
+      {},
     );
     for (const [configPath, port] of Object.entries(savedPorts)) {
       this.portAssignments.set(configPath, port);
@@ -60,33 +60,43 @@ export class McpManager {
 
     const savedDisabled = this.context.globalState.get<string[]>(
       "mcpDisabledDesigns",
-      []
+      [],
     );
     this.disabledDesigns = new Set(savedDisabled);
 
-    // Subscribe to validation events
+    // Restart server with fresh schema whenever validation passes (schema may have changed)
     this.designManager.onDidValidateDesign(async ({ design, result }) => {
-      if (!this.isGloballyEnabled()) {
-        return;
-      }
-      if (this.disabledDesigns.has(design.configPath)) {
+      if (
+        !this.isGloballyEnabled() ||
+        this.disabledDesigns.has(design.configPath)
+      ) {
         return;
       }
       if (result.valid) {
         await this.startOrRestartServer(design);
-      } else {
-        await this.stopServer(design.configPath);
       }
     });
 
-    // Stop servers for designs that no longer exist
+    // Start servers for new designs; stop servers for removed designs
     this.designManager.onDidChangeDesigns(async () => {
+      if (!this.isGloballyEnabled()) {
+        this._onDidChangeMcpServers.fire();
+        return;
+      }
       const currentPaths = new Set(
-        this.designManager.getDesigns().map((d) => d.configPath)
+        this.designManager.getDesigns().map((d) => d.configPath),
       );
       for (const configPath of [...this.servers.keys()]) {
         if (!currentPaths.has(configPath)) {
           await this.stopServer(configPath);
+        }
+      }
+      for (const design of this.designManager.getDesigns()) {
+        if (
+          !this.disabledDesigns.has(design.configPath) &&
+          !this.isServerRunning(design.configPath)
+        ) {
+          await this.startOrRestartServer(design);
         }
       }
       this._onDidChangeMcpServers.fire();
@@ -112,7 +122,9 @@ export class McpManager {
   }
 
   getServerPort(configPath: string): number | undefined {
-    return this.servers.get(configPath)?.port ?? this.portAssignments.get(configPath);
+    return (
+      this.servers.get(configPath)?.port ?? this.portAssignments.get(configPath)
+    );
   }
 
   getServerUrl(configPath: string): string | undefined {
@@ -120,20 +132,40 @@ export class McpManager {
     return port !== undefined ? `http://127.0.0.1:${port}/mcp` : undefined;
   }
 
-  async toggleDesign(configPath: string): Promise<void> {
-    if (this.disabledDesigns.has(configPath)) {
-      this.disabledDesigns.delete(configPath);
-      await this.saveDisabledState();
-      // Try to start the server if design is valid
-      const design = this.designManager.getDesign(configPath);
-      if (design?.lastValidation?.valid) {
-        await this.startOrRestartServer(design);
-      }
-    } else {
-      this.disabledDesigns.add(configPath);
-      await this.saveDisabledState();
-      await this.stopServer(configPath);
+  async enableDesign(configPath: string): Promise<void> {
+    this.disabledDesigns.delete(configPath);
+    await this.saveDisabledState();
+    const design = this.designManager.getDesign(configPath);
+    if (design) {
+      await this.startOrRestartServer(design);
     }
+    this._onDidChangeMcpServers.fire();
+  }
+
+  async disableDesign(configPath: string): Promise<void> {
+    this.disabledDesigns.add(configPath);
+    await this.saveDisabledState();
+    await this.stopServer(configPath);
+    this._onDidChangeMcpServers.fire();
+  }
+
+  async startServer(configPath: string): Promise<void> {
+    const design = this.designManager.getDesign(configPath);
+    if (design) {
+      await this.startOrRestartServer(design);
+    }
+  }
+
+  async stopServer(configPath: string): Promise<void> {
+    const entry = this.servers.get(configPath);
+    if (!entry) {
+      return;
+    }
+    if (entry.process && !entry.process.killed) {
+      entry.process.kill();
+      await new Promise<void>((resolve) => setTimeout(resolve, 100));
+    }
+    this.servers.delete(configPath);
     this._onDidChangeMcpServers.fire();
   }
 
@@ -146,27 +178,17 @@ export class McpManager {
   async startAllEnabledServers(): Promise<void> {
     const designs = this.designManager.getDesigns();
     for (const design of designs) {
-      if (
-        !this.disabledDesigns.has(design.configPath) &&
-        design.lastValidation?.valid
-      ) {
+      if (!this.disabledDesigns.has(design.configPath)) {
         await this.startOrRestartServer(design);
       }
     }
   }
 
-  async restartServer(configPath: string): Promise<void> {
-    const design = this.designManager.getDesign(configPath);
-    if (design) {
-      await this.startOrRestartServer(design);
-    }
-  }
-
   private async startOrRestartServer(design: DesignEntry): Promise<void> {
-    const binaryPath = this.binaryManager.getBinaryPath();
-    if (!this.binaryManager.isBinaryAvailable()) {
+    const binaryPath = await this.binaryManager.ensureBinaryAvailable();
+    if (!binaryPath) {
       this.output.appendLine(
-        `[McpManager] Binary not available, skipping server start for ${design.configPath}`
+        `[McpManager] Binary not available, skipping server start for ${design.configPath}`,
       );
       return;
     }
@@ -178,7 +200,7 @@ export class McpManager {
       const schemaPath = await this.getOrWriteSchemaFile(design);
       if (!schemaPath) {
         this.output.appendLine(
-          `[McpManager] Could not get schema for ${design.configPath}, skipping`
+          `[McpManager] Could not get schema for ${design.configPath}, skipping`,
         );
         return;
       }
@@ -186,26 +208,30 @@ export class McpManager {
       const port = this.getOrAllocatePort(design.configPath);
       const configPath = await this.writeConfigFile(design, schemaPath, port);
 
-      const proc = child_process.spawn(binaryPath, ["--config", configPath], {
+      const proc = child_process.spawn(binaryPath, [configPath], {
         detached: false,
         stdio: ["ignore", "pipe", "pipe"],
       });
 
       proc.stdout?.on("data", (data: Buffer) => {
         this.output.appendLine(
-          `[McpManager:${path.basename(path.dirname(design.configPath))}] ${data.toString().trim()}`
+          `[McpManager:${path.basename(path.dirname(design.configPath))}] ${data
+            .toString()
+            .trim()}`,
         );
       });
 
       proc.stderr?.on("data", (data: Buffer) => {
         this.output.appendLine(
-          `[McpManager:${path.basename(path.dirname(design.configPath))} ERR] ${data.toString().trim()}`
+          `[McpManager:${path.basename(
+            path.dirname(design.configPath),
+          )} ERR] ${data.toString().trim()}`,
         );
       });
 
       proc.on("exit", (code) => {
         this.output.appendLine(
-          `[McpManager] Server for ${design.configPath} exited with code ${code}`
+          `[McpManager] Server for ${design.configPath} exited with code ${code}`,
         );
         const entry = this.servers.get(design.configPath);
         if (entry) {
@@ -222,35 +248,19 @@ export class McpManager {
       });
 
       this.output.appendLine(
-        `[McpManager] Started MCP server for ${design.configPath} on port ${port}`
+        `[McpManager] Started MCP server for ${design.configPath} on port ${port}`,
       );
       this._onDidChangeMcpServers.fire();
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       this.output.appendLine(
-        `[McpManager] Failed to start server for ${design.configPath}: ${message}`
+        `[McpManager] Failed to start server for ${design.configPath}: ${message}`,
       );
     }
   }
 
-  private async stopServer(configPath: string): Promise<void> {
-    const entry = this.servers.get(configPath);
-    if (!entry) {
-      return;
-    }
-
-    if (entry.process && !entry.process.killed) {
-      entry.process.kill();
-      // Give process a moment to clean up
-      await new Promise<void>((resolve) => setTimeout(resolve, 100));
-    }
-
-    this.servers.delete(configPath);
-    this._onDidChangeMcpServers.fire();
-  }
-
   private async getOrWriteSchemaFile(
-    design: DesignEntry
+    design: DesignEntry,
   ): Promise<string | null> {
     if (design.type === "standalone") {
       return design.configPath;
@@ -262,7 +272,7 @@ export class McpManager {
       const result = await composeApiSchema(design.configPath);
       if (!result.success || !result.schema) {
         this.output.appendLine(
-          `[McpManager] Failed to compose API schema for ${design.configPath}: ${result.error}`
+          `[McpManager] Failed to compose API schema for ${design.configPath}: ${result.error}`,
         );
         return null;
       }
@@ -270,14 +280,14 @@ export class McpManager {
       const designName = path.basename(path.dirname(design.configPath));
       const schemaFilePath = path.join(
         this.schemasDir,
-        `${sanitizeName(designName)}-api.graphql`
+        `${sanitizeName(designName)}-api.graphql`,
       );
       await fs.promises.writeFile(schemaFilePath, result.schema, "utf-8");
       return schemaFilePath;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       this.output.appendLine(
-        `[McpManager] Error composing schema for ${design.configPath}: ${message}`
+        `[McpManager] Error composing schema for ${design.configPath}: ${message}`,
       );
       return null;
     }
@@ -286,7 +296,7 @@ export class McpManager {
   private async writeConfigFile(
     design: DesignEntry,
     schemaPath: string,
-    port: number
+    port: number,
   ): Promise<string> {
     const designName =
       design.type === "federated"
@@ -295,7 +305,7 @@ export class McpManager {
 
     const configFilePath = path.join(
       this.configsDir,
-      `${sanitizeName(designName)}.yaml`
+      `${sanitizeName(designName)}.yaml`,
     );
 
     const configContent = [
@@ -311,8 +321,10 @@ export class McpManager {
       `introspection:`,
       `  introspect:`,
       `    enabled: true`,
+      `    minify: true`,
       `  search:`,
       `    enabled: true`,
+      `    minify: true`,
       `  validate:`,
       `    enabled: true`,
     ].join("\n");
@@ -340,10 +352,9 @@ export class McpManager {
   }
 
   private async saveDisabledState(): Promise<void> {
-    await this.context.globalState.update(
-      "mcpDisabledDesigns",
-      [...this.disabledDesigns]
-    );
+    await this.context.globalState.update("mcpDisabledDesigns", [
+      ...this.disabledDesigns,
+    ]);
   }
 
   dispose(): void {

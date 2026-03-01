@@ -870,27 +870,32 @@ export async function embeddingStatusClickCommand(
   // If already embedded, clicking does nothing (use context menu for actions)
 }
 
-export async function toggleMcpServerCommand(
+export async function startMcpServerCommand(
   mcpManager: McpManager,
   item: DesignTreeItem
 ): Promise<void> {
-  await mcpManager.toggleDesign(item.designPath);
+  await mcpManager.startServer(item.designPath);
 }
 
-export async function restartMcpServerCommand(
+export async function stopMcpServerCommand(
   mcpManager: McpManager,
   item: DesignTreeItem
 ): Promise<void> {
-  await vscode.window.withProgress(
-    {
-      location: vscode.ProgressLocation.Notification,
-      title: "Restarting MCP Server...",
-      cancellable: false,
-    },
-    async () => {
-      await mcpManager.restartServer(item.designPath);
-    }
-  );
+  await mcpManager.stopServer(item.designPath);
+}
+
+export async function enableMcpServerCommand(
+  mcpManager: McpManager,
+  item: DesignTreeItem
+): Promise<void> {
+  await mcpManager.enableDesign(item.designPath);
+}
+
+export async function disableMcpServerCommand(
+  mcpManager: McpManager,
+  item: DesignTreeItem
+): Promise<void> {
+  await mcpManager.disableDesign(item.designPath);
 }
 
 export async function downloadMcpBinaryCommand(

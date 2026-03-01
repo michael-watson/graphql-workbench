@@ -124,15 +124,12 @@ export class DesignTreeItem extends vscode.TreeItem {
         break;
       case "mcp-status":
         if (mcpEnabled === false) {
+          this.contextValue = "mcp-status-disabled";
           this.iconPath = new vscode.ThemeIcon("plug");
-          this.tooltip = "Apollo MCP Server disabled. Click to enable.";
+          this.tooltip = "Apollo MCP Server disabled. Right-click to enable.";
           this.description = "MCP disabled";
-          this.command = {
-            command: "graphql-workbench.toggleMcpServer",
-            title: "Enable MCP Server",
-            arguments: [this],
-          };
         } else if (mcpRunning && mcpPort !== undefined) {
+          this.contextValue = "mcp-status-running";
           this.iconPath = new vscode.ThemeIcon(
             "plug",
             new vscode.ThemeColor("charts.green")
@@ -140,9 +137,10 @@ export class DesignTreeItem extends vscode.TreeItem {
           this.tooltip = `Apollo MCP Server running at http://127.0.0.1:${mcpPort}/mcp`;
           this.description = `http://127.0.0.1:${mcpPort}/mcp`;
         } else {
+          this.contextValue = "mcp-status-stopped";
           this.iconPath = new vscode.ThemeIcon("plug");
-          this.tooltip = "Apollo MCP Server not running (schema may be invalid or binary not downloaded)";
-          this.description = "MCP not running";
+          this.tooltip = "Apollo MCP Server stopped. Right-click to start.";
+          this.description = "MCP stopped";
         }
         break;
     }
