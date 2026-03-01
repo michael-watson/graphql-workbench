@@ -60,11 +60,13 @@ Generates a GraphQL operation from a natural language description using the embe
 
 ### Generation Process
 
-- Embeds your query as a vector and performs similarity search.
-- Uses the LLM to identify the most relevant root field (Query, Mutation, or Subscription).
-- Retrieves related types and arguments from the vector store.
-- Uses the LLM to generate a complete GraphQL operation with example variables.
-- Validates the operation by parsing it. If parsing fails, the LLM retries (up to 5 times by default).
+1. **Entity extraction** (optional) -- the LLM rewrites your query into concise search terms for better vector recall.
+2. **Vector search** -- the rewritten query is embedded and searched against the vector store for root operation fields (Query/Mutation/Subscription) above the minimum similarity threshold.
+3. **Operation type** -- the LLM picks Query, Mutation, or Subscription from the matching fields.
+4. **Root field selection** -- the LLM picks the single most relevant root field.
+5. **Type discovery** -- the extension recursively walks the root field's return type and arguments to collect all referenced object, input, interface, union, and enum types from the vector store.
+6. **Operation generation** -- the LLM generates a complete GraphQL operation using the root field and related types as context. When an Apollo MCP Server is running and the Anthropic provider is used, the LLM may call `Search` or `Introspect` tools during this step to look up additional schema details; each tool call does not consume a validation retry.
+7. **Validation** -- the operation is validated. When an Apollo MCP Server is running, validation is performed directly via the server's `Validate` tool (no LLM involved). Otherwise, the operation is validated by parsing it with the `graphql` library. If invalid, the LLM attempts a fix (with access to the same MCP tools), up to `maxValidationRetries` times.
 
 ### Output
 
@@ -191,6 +193,40 @@ Removes all documents from the vector store.
 3. All embedded documents are removed, and operation generators are reset.
 
 After clearing, you need to embed a schema again before generating operations or running analysis.
+
+---
+
+## Open Search Playground
+
+**Command Palette:** `GraphQL Workbench: Open Search Playground`
+
+Opens a webview panel that runs the full operation generation pipeline and displays every intermediate step as it completes. Useful for understanding how the extension processes a query and for debugging generation quality.
+
+### Prerequisites
+
+- A schema must be embedded (same as Generate Operation).
+- An LLM provider must be configured.
+
+### Panel Sections
+
+The playground shows each stage in sequence:
+
+| Section | Description |
+|---------|-------------|
+| **Query Extraction** | The original query alongside the extracted version (if entity extraction is enabled and the query was rewritten). |
+| **Vector Search Results** | Table of matching root operation fields with similarity scores, return types, and content previews. |
+| **Operation Type Classification** | The operation type (Query / Mutation / Subscription) the LLM selected. |
+| **Root Field Selection** | The specific root field chosen, with its return type, arguments, and schema snippet. |
+| **Related Type Discovery** | Chip list of all types recursively discovered from the root field and its arguments. |
+| **Operation Generation** | Status of the LLM generation call, plus a live timeline of any MCP tool calls (Search or Introspect) invoked by the LLM. Each tool call shows the query sent and the number of characters returned by the MCP server. |
+| **Validation Loop** | One card per validation attempt. Each card shows: attempt number, VALID or INVALID badge, error messages (when invalid), a collapsible snapshot of the failing operation, and any MCP tool calls made during the LLM fix attempt. |
+| **Generated Operation** | The final operation in a copyable code block, followed by example variables (if any). The section heading shows the total time from generation start to completion. |
+
+### Notes
+
+- The playground is a **singleton** panel; opening it again reveals the existing instance.
+- MCP tool call events and validation attempt cards update live as the pipeline runs.
+- Closing and reopening the panel resets all sections.
 
 ---
 

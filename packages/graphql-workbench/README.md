@@ -7,7 +7,9 @@ Embed GraphQL schemas and generate operations from natural language queries dire
 - **Schema Design Workbench** -- Manage standalone and federated GraphQL designs from a dedicated activity bar with validation, embedding, and schema composition
 - **Federation Entity Completion** -- Autocomplete entity references from other subgraphs when editing federated schemas, with correct `@key` fields and type stubs
 - **Schema Embedding** -- Parse and embed `.graphql` schemas from local files or live endpoints into a vector store
-- **Operation Generation** -- Generate GraphQL queries, mutations, and subscriptions from natural language using an LLM
+- **Apollo MCP Server** -- A local Apollo MCP Server is automatically started for each design. It exposes `Search`, `Introspect`, and `Validate` tools over a JSON-RPC HTTP endpoint, enabling LLM-assisted schema lookup during operation generation
+- **Operation Generation** -- Generate GraphQL queries, mutations, and subscriptions from natural language using an LLM, with optional MCP-assisted Search and Introspect tool calls during generation and direct MCP validation of the result
+- **Search Playground** -- A step-by-step visualization of the full operation generation pipeline, showing vector search results, type discovery, MCP tool calls, validation loop attempts, and the final generated operation with timing
 - **Explorer Panel** -- An integrated Apollo Explorer webview for running generated operations against a live endpoint
 - **Schema Linting** -- Check schemas against naming convention and design rules with quick-fix dismissals
 - **Schema Design Analysis** -- LLM-powered analysis of your schema against best practice categories
@@ -26,6 +28,7 @@ Open the Command Palette (`Cmd+Shift+P` / `Ctrl+Shift+P`) and search for:
 | `GraphQL Workbench: Introspect Endpoint to File` | Download a remote schema via introspection and save it as a `.graphql` file |
 | `GraphQL Workbench: Lint Schema` | Check a schema against naming convention and design rules |
 | `GraphQL Workbench: Analyze Schema Design` | Generate an LLM-powered best practices report for the embedded schema |
+| `GraphQL Workbench: Open Search Playground` | Open a step-by-step visualization of the full operation generation pipeline |
 | `GraphQL Workbench: Clear All Embeddings` | Remove all stored embeddings from the vector store |
 
 ## Context Menus
@@ -153,6 +156,41 @@ Use the toolbar buttons at the top of the Designs panel:
 - **+** (Add icon) -- Create a new standalone schema
 - **New Federated Design** (from the overflow menu) -- Create a federated design with a sample subgraph
 
+## Apollo MCP Server
+
+The extension automatically manages a local [Apollo MCP Server](https://github.com/apollographql/apollo-mcp-server) for each design in the Schema Design Workbench. The server exposes the embedded schema over a JSON-RPC HTTP endpoint, giving the LLM direct access to schema tools during operation generation.
+
+### How It Works
+
+- A server is started automatically for every non-disabled design when the workspace loads.
+- The server restarts automatically whenever a design is saved and validation passes, keeping the schema in sync.
+- Each design gets a fixed port starting at 9001 (persisted between sessions).
+- Standalone designs point directly to the `.graphql` file. Federated designs use the composed API schema (federation directives stripped).
+- The binary is downloaded automatically from the Apollo GitHub releases on first use.
+
+### Tree View
+
+Each design shows an **MCP** status row in the Schema Design Workbench tree:
+
+| Status | Description |
+|--------|-------------|
+| Running | Green indicator. Description shows the full server URL, e.g. `http://127.0.0.1:9001/mcp`. |
+| Stopped | Grey indicator. Server is not running but can be started. |
+| Disabled | Grey indicator. Server is permanently disabled for this design. |
+
+Right-click the MCP status row to start, stop, enable, or disable the server for a specific design.
+
+### Integration with Operation Generation
+
+When an Apollo MCP Server is running for a design and the Anthropic LLM provider is configured, the operation generator automatically makes the `Search` and `Introspect` tools available to the LLM:
+
+- **Search** -- the LLM can search the schema by keyword to find relevant types and fields
+- **Introspect** -- the LLM can look up the full definition of a specific type or field (always uses depth 1)
+
+These tool calls happen transparently during operation generation and error fixing. They do not count against the validation retry limit.
+
+When an MCP server is running, the generated operation is also validated directly via the server's `Validate` tool, bypassing the LLM for that step. If the server is unreachable, the extension falls back to local parse-only validation.
+
 ## Federation Entity Completion
 
 When editing a subgraph `.graphql` file within a federated design, the extension provides autocomplete suggestions for entity references from other subgraphs. This mirrors the entity completion behavior from the original Apollo Workbench extension.
@@ -217,6 +255,23 @@ The cursor is placed inside the type body so you can immediately add extension f
    - "fetch order by id with line items"
 4. The Explorer panel opens with the generated operation loaded into Apollo Explorer, ready to run against your endpoint
 5. The operation includes a `# Prompt:` comment at the top showing the original description
+
+When an Apollo MCP Server is running and the Anthropic provider is configured, the LLM may call `Search` and `Introspect` during generation to look up schema details. Validation is also performed directly via the MCP server rather than by the LLM.
+
+### 2a. Inspect the Generation Pipeline
+
+Run `GraphQL Workbench: Open Search Playground` to open a step-by-step visualization of the entire generation process. The playground runs the same pipeline as Generate Operation and shows each stage as it completes:
+
+| Stage | What you see |
+|-------|-------------|
+| Query Extraction | Whether the query was rewritten by the LLM for better vector search |
+| Vector Search Results | All root operation fields found, with similarity scores |
+| Operation Type | Whether the LLM chose Query, Mutation, or Subscription |
+| Root Field Selection | The specific field chosen, with its return type and arguments |
+| Related Type Discovery | All types traversed from the root field (chips) |
+| Operation Generation | Live MCP tool call timeline — each Search or Introspect call shows its query and how many characters the server returned |
+| Validation Loop | Each attempt card: VALID/INVALID badge, errors, expandable failing operation snapshot, and any tool calls made during the fix |
+| Generated Operation | Final operation in a copyable code block, with total generation time |
 
 ### 3. Use the Explorer Panel
 
