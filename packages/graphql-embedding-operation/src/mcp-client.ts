@@ -40,28 +40,114 @@ let _idCounter = 0;
 
 export class McpClient {
   private readonly serverUrl: string;
+  private sessionId: string | undefined = undefined;
+  private initialized = false;
+  private initializingPromise: Promise<void> | undefined = undefined;
 
   constructor(serverUrl: string) {
     this.serverUrl = serverUrl;
   }
 
   /**
-   * Send a JSON-RPC 2.0 request to the MCP server.
-   * Handles both application/json and text/event-stream responses.
+   * Perform the MCP protocol handshake (initialize + initialized notification).
+   * Required before any tool calls on the streamable_http transport.
+   * Lazily initialized and idempotent — safe to call multiple times.
    */
-  private async callJsonRpc(
-    method: string,
-    params: Record<string, unknown>
-  ): Promise<unknown> {
-    const id = String(++_idCounter);
-    const body: JsonRpcRequest = { jsonrpc: "2.0", id, method, params };
+  private ensureInitialized(): Promise<void> {
+    if (this.initialized) return Promise.resolve();
+    if (this.initializingPromise) return this.initializingPromise;
+    this.initializingPromise = this._initialize().finally(() => {
+      this.initializingPromise = undefined;
+    });
+    return this.initializingPromise;
+  }
 
-    const response = await fetch(this.serverUrl, {
+  private async _initialize(): Promise<void> {
+    const id = String(++_idCounter);
+    const initBody = {
+      jsonrpc: "2.0" as const,
+      id,
+      method: "initialize",
+      params: {
+        protocolVersion: "2024-11-05",
+        capabilities: {},
+        clientInfo: { name: "graphql-workbench", version: "1.0.0" },
+      },
+    };
+
+    const initResponse = await fetch(this.serverUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Accept: "application/json, text/event-stream",
       },
+      body: JSON.stringify(initBody),
+    });
+
+    if (!initResponse.ok) {
+      throw new Error(`MCP initialize failed: ${initResponse.status} ${initResponse.statusText}`);
+    }
+
+    // Capture session ID if the server provides one
+    const sessionId = initResponse.headers.get("Mcp-Session-Id");
+    if (sessionId) {
+      this.sessionId = sessionId;
+    }
+
+    // Consume the initialize response body
+    const initContentType = initResponse.headers.get("content-type") ?? "";
+    if (initContentType.includes("text/event-stream")) {
+      await initResponse.text();
+    } else {
+      await initResponse.json().catch(() => {});
+    }
+
+    // Send the initialized notification (no id field = notification, no response expected)
+    const notifHeaders: Record<string, string> = {
+      "Content-Type": "application/json",
+      Accept: "application/json, text/event-stream",
+    };
+    if (this.sessionId) {
+      notifHeaders["Mcp-Session-Id"] = this.sessionId;
+    }
+    await fetch(this.serverUrl, {
+      method: "POST",
+      headers: notifHeaders,
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        method: "notifications/initialized",
+        params: {},
+      }),
+    }).catch(() => {}); // Notifications don't need a response
+
+    this.initialized = true;
+  }
+
+  /**
+   * Send a JSON-RPC 2.0 request to the MCP server.
+   * Handles both application/json and text/event-stream responses.
+   * Automatically performs the MCP initialization handshake on first call.
+   */
+  private async callJsonRpc(
+    method: string,
+    params: Record<string, unknown>
+  ): Promise<unknown> {
+    await this.ensureInitialized();
+
+    const id = String(++_idCounter);
+    const body: JsonRpcRequest = { jsonrpc: "2.0", id, method, params };
+
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      Accept: "application/json, text/event-stream",
+    };
+    if (this.sessionId) {
+      headers["Mcp-Session-Id"] = this.sessionId;
+    }
+
+    const response = await fetch(this.serverUrl, {
+      method: "POST",
+      headers,
       body: JSON.stringify(body),
     });
 

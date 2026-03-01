@@ -4,6 +4,20 @@ All notable changes to GraphQL Workbench are documented here.
 
 ---
 
+## [0.3.1]
+
+### Bug Fixes
+
+- **MCP validation always falling back to local parser.** The `McpClient` was calling `tools/call` without first performing the MCP protocol initialization handshake. The Apollo MCP Server (and any strict MCP implementation) requires a `initialize` JSON-RPC request followed by a `notifications/initialized` notification before tool calls are accepted. Without this, the server rejected every call, the `catch` block returned `null`, and the generator silently fell back to the local parse-only validator. The client now performs a lazy initialization on the first call, captures the optional `Mcp-Session-Id` response header, and includes it in all subsequent requests.
+
+- **Search Playground — validation method not visible.** There was no indication in the Validation Loop section of whether each attempt was validated by the Apollo MCP Server or the local GraphQL parser. Each validation attempt card now shows a colored badge: **MCP Server** (blue) when validated via the Apollo MCP Server, or **Local Parser** (purple) when falling back to local parse/validate.
+
+- **Required arguments omitted by LLM on large schemas.** When the schema context sent to the LLM was large, required (non-null) arguments on the selected root field were sometimes silently dropped, producing an invalid operation that the validation loop could not fix without the necessary argument definitions. The operation generation and error-fix prompts now explicitly extract required arguments from the root field metadata and include a `CRITICAL:` block listing every required argument with its type in both the system and user messages. The same instruction is repeated in `fixOperationErrors` so correction attempts also respect required arguments.
+
+- **Related Type Discovery — unsorted type chips in Search Playground.** The type chips in the Related Type Discovery section of the Search Playground were displayed in traversal order (insertion order of the BFS map), which varied between searches. They are now sorted alphabetically by type name.
+
+---
+
 ## [0.3.0]
 
 ### Bug Fixes

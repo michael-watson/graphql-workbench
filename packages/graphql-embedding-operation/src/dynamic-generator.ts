@@ -803,7 +803,21 @@ export class DynamicOperationGenerator {
     types: EmbeddingDocument[],
     inputText: string
   ): Promise<{ operation: string; variables: Record<string, unknown> }> {
-    const systemPrompt = "Your goal is to generate a valid GraphQL operation and example variables based on the assistant documents in the chat history. Return the operation in a ```graphql code block and variables in a ```json code block.";
+    // Identify required (non-null) arguments that must always be included
+    const args = rootField.metadata.arguments ?? [];
+    const requiredArgs = args.filter((a: { name: string; type: string }) =>
+      a.type.trim().endsWith("!")
+    );
+
+    let requiredArgsInstruction = "";
+    if (requiredArgs.length > 0) {
+      const argList = requiredArgs
+        .map((a: { name: string; type: string }) => `  - ${a.name}: ${a.type}`)
+        .join("\n");
+      requiredArgsInstruction = `\n\nCRITICAL: The selected root field has REQUIRED arguments (non-null). You MUST include ALL of the following arguments in the operation with corresponding variable declarations:\n${argList}\nOmitting any required argument will cause the operation to be invalid.`;
+    }
+
+    const systemPrompt = `Your goal is to generate a valid GraphQL operation and example variables based on the assistant documents in the chat history. Return the operation in a \`\`\`graphql code block and variables in a \`\`\`json code block.${requiredArgsInstruction}`;
 
     const messages: ChatMessage[] = [
       {
@@ -826,8 +840,14 @@ export class DynamicOperationGenerator {
       });
     }
 
-    // Final user message
-    const userPrompt = `My assistant returned the most relevant pieces of the GraphQL schema, can you generate me a valid GraphQL operation for my initial question: "${inputText}"`;
+    // Final user message — re-state required args so the LLM cannot miss them
+    let userPrompt = `My assistant returned the most relevant pieces of the GraphQL schema, can you generate me a valid GraphQL operation for my initial question: "${inputText}"`;
+    if (requiredArgs.length > 0) {
+      const argNames = requiredArgs
+        .map((a: { name: string; type: string }) => `${a.name} (${a.type})`)
+        .join(", ");
+      userPrompt += `\n\nIMPORTANT: Make sure to include ALL required arguments in the operation: ${argNames}`;
+    }
     messages.push({
       role: "user",
       content: userPrompt,
@@ -896,6 +916,7 @@ export class DynamicOperationGenerator {
       // Prefer MCP validation (direct, no LLM), fall back to local parse/validate
       let validation: ValidationResult;
       const mcpResult = await this.validateWithMcp(currentOperation);
+      const validationMethod: "mcp" | "local" = mcpResult !== null ? "mcp" : "local";
       if (mcpResult !== null) {
         validation = mcpResult;
         this.log(`[MCP] Validation used: Apollo MCP Server`);
@@ -904,7 +925,7 @@ export class DynamicOperationGenerator {
         this.log(`[Local] Validation used: local GraphQL parser/validator`);
       }
 
-      this.logger?.onValidationAttempt?.(attempts, maxValidationRetries, validation.valid, validation.errors, currentOperation);
+      this.logger?.onValidationAttempt?.(attempts, maxValidationRetries, validation.valid, validation.errors, currentOperation, validationMethod);
 
       if (validation.valid) {
         this.log("Validation PASSED");
@@ -975,11 +996,26 @@ export class DynamicOperationGenerator {
     context: EmbeddingDocument[],
     inputText: string
   ): Promise<string> {
+    // Re-derive required args from the root field (first context doc is the root field)
+    const rootFieldDoc = context[0];
+    const requiredArgs = rootFieldDoc
+      ? (rootFieldDoc.metadata.arguments ?? []).filter(
+          (a: { name: string; type: string }) => a.type.trim().endsWith("!")
+        )
+      : [];
+
+    let requiredArgsInstruction = "";
+    if (requiredArgs.length > 0) {
+      const argList = requiredArgs
+        .map((a: { name: string; type: string }) => `  - ${a.name}: ${a.type}`)
+        .join("\n");
+      requiredArgsInstruction = `\n\nCRITICAL: The following arguments are REQUIRED and must be present in the fixed operation:\n${argList}`;
+    }
+
     const messages: ChatMessage[] = [
       {
         role: "system",
-        content:
-          "You are a GraphQL expert. Fix the errors in the provided GraphQL operation. Return ONLY the corrected operation in a ```graphql code block.",
+        content: `You are a GraphQL expert. Fix the errors in the provided GraphQL operation. Return ONLY the corrected operation in a \`\`\`graphql code block.${requiredArgsInstruction}`,
       },
     ];
 
@@ -992,6 +1028,11 @@ export class DynamicOperationGenerator {
     }
 
     // Provide the broken operation and errors
+    const requiredArgsSuffix =
+      requiredArgs.length > 0
+        ? `\n\nRemember: ALL required arguments must be included: ${requiredArgs.map((a: { name: string; type: string }) => `${a.name} (${a.type})`).join(", ")}`
+        : "";
+
     const userPrompt = `The following GraphQL operation has errors:
 
 \`\`\`graphql
@@ -1003,7 +1044,7 @@ ${errors.map((e) => `- ${e}`).join("\n")}
 
 Original request: "${inputText}"
 
-Please fix the operation and return only the corrected GraphQL operation.`;
+Please fix the operation and return only the corrected GraphQL operation.${requiredArgsSuffix}`;
 
     messages.push({
       role: "user",
