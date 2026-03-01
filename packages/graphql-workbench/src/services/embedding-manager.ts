@@ -886,6 +886,24 @@ export class EmbeddingManager {
         mcpServerUrl: mcpServerUrlForEmbed,
         logger: {
           log: (message: string) => this.log(message),
+          onToolCall: (toolName: string, query: string) => {
+            this._playgroundOnProgress?.({
+              step: "toolCall",
+              data: { toolName, query, status: "calling" },
+            });
+          },
+          onToolResult: (toolName: string, resultLength: number) => {
+            this._playgroundOnProgress?.({
+              step: "toolCall",
+              data: { toolName, resultLength, status: "complete" },
+            });
+          },
+          onValidationAttempt: (attempt: number, maxAttempts: number, valid: boolean, errors: string[], operation: string) => {
+            this._playgroundOnProgress?.({
+              step: "validationAttempt",
+              data: { attempt, maxAttempts, valid, errors, operation },
+            });
+          },
         },
       });
       this.log("Dynamic operation generator initialized");
