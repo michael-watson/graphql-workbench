@@ -1,0 +1,35 @@
+name: Validate PR Title
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  pull-requests: read
+  statuses: write
+
+jobs:
+  validate:
+    name: Validate PR Title
+    runs-on: ubuntu-latest
+    steps:
+      - uses: amannn/action-semantic-pull-request@v5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          # A scope is required: fix(mcp-server): description
+          requireScope: true
+          # Allowed types
+          types: |
+            feat
+            fix
+            docs
+            chore
+            refactor
+            test
+            perf
+            ci
+          # release-please creates PRs titled "chore(release): release ..."
+          # or "chore(main): release ..." — let those through without scope validation
+          ignoreLabels: |
+            autorelease: pending
