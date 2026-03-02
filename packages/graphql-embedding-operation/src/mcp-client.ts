@@ -234,32 +234,32 @@ export class McpClient {
     try {
       const text = await this.callTool("validate", { operation });
 
-      // Parse the validate response. Apollo MCP Server returns plain text or JSON.
-      // Try JSON first, then look for error patterns in plain text.
+      // Try JSON first (future-proofing for structured responses)
       try {
         const parsed = JSON.parse(text) as { valid?: boolean; errors?: string[] };
-        return {
-          valid: parsed.valid ?? true,
-          errors: parsed.errors ?? [],
-        };
-      } catch {
-        // Plain text: look for error indicators
-        const lowerText = text.toLowerCase();
-        if (
-          lowerText.includes("error") ||
-          lowerText.includes("invalid") ||
-          lowerText.includes("unknown")
-        ) {
-          // Extract lines that look like errors
-          const errorLines = text
-            .split("\n")
-            .map((l) => l.trim())
-            .filter((l) => l.length > 0 && !l.startsWith("```"));
-          return { valid: false, errors: errorLines };
+        if (typeof parsed.valid === "boolean") {
+          return {
+            valid: parsed.valid,
+            errors: parsed.errors ?? [],
+          };
         }
-        // No error indicators — treat as valid
+      } catch {
+        // Not JSON — parse as plain text
+      }
+
+      // Apollo MCP Server returns "Operation is valid" on success.
+      // Any other non-empty response is a validation failure — use the text as the error.
+      const trimmed = text.trim();
+      if (!trimmed || trimmed === "Operation is valid") {
         return { valid: true, errors: [] };
       }
+
+      const errorLines = trimmed
+        .split("\n")
+        .map((l) => l.trim())
+        .filter((l) => l.length > 0);
+
+      return { valid: false, errors: errorLines };
     } catch {
       // Server unreachable or tool call failed
       return null;
