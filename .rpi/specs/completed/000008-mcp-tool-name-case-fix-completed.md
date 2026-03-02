@@ -1,7 +1,7 @@
 # Spec 000008: Fix MCP Tool Name Casing and Misleading Log Message
 
 **Spec ID:** 000008
-**Status:** implementing
+**Status:** completed
 **Created:** 2026-03-01T00:00:00Z
 **Branch:** fix-mcp-server-validation
 
@@ -74,4 +74,5 @@ The user sees two incorrect messages:
 
 **Modified files:**
 - `packages/graphql-embedding-operation/src/mcp-client.ts` — Fixed tool call names: `"Search"` → `"search"`, `"Introspect"` → `"introspect"`, `"Validate"` → `"validate"`
-- `packages/graphql-embedding-operation/src/dynamic-generator.ts` — Fixed `MCP_TOOLS` name definitions and tool handler checks to lowercase; fixed misleading fallback log from "MCP server unreachable" to "MCP validate tool unavailable"
+- `packages/graphql-embedding-operation/src/dynamic-generator.ts` — Fixed `MCP_TOOLS` name definitions and tool handler checks to lowercase; fixed misleading fallback log from "MCP server unreachable" to "MCP validate tool unavailable"; rewrote `fixOperationErrors()` to extract type+field from errors, call `introspect(type)` AND `search(field)` programmatically, and inject both as LLM context
+- `packages/graphql-embedding-operation/src/mcp-client.ts` — Rewrote `validate()` response parsing: treats "Operation is valid" as success and anything else as error lines (previously relied on keyword matching which missed GraphQL compiler errors)

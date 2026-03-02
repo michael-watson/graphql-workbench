@@ -85,7 +85,9 @@ export class McpClient {
     });
 
     if (!initResponse.ok) {
-      throw new Error(`MCP initialize failed: ${initResponse.status} ${initResponse.statusText}`);
+      throw new Error(
+        `MCP initialize failed: ${initResponse.status} ${initResponse.statusText}`,
+      );
     }
 
     // Capture session ID if the server provides one
@@ -130,7 +132,7 @@ export class McpClient {
    */
   private async callJsonRpc(
     method: string,
-    params: Record<string, unknown>
+    params: Record<string, unknown>,
   ): Promise<unknown> {
     await this.ensureInitialized();
 
@@ -152,7 +154,9 @@ export class McpClient {
     });
 
     if (!response.ok) {
-      throw new Error(`MCP server responded with ${response.status}: ${response.statusText}`);
+      throw new Error(
+        `MCP server responded with ${response.status}: ${response.statusText}`,
+      );
     }
 
     const contentType = response.headers.get("content-type") ?? "";
@@ -188,7 +192,7 @@ export class McpClient {
    */
   private async callTool(
     name: string,
-    args: Record<string, unknown>
+    args: Record<string, unknown>,
   ): Promise<string> {
     const result = (await this.callJsonRpc("tools/call", {
       name,
@@ -196,8 +200,9 @@ export class McpClient {
     })) as McpToolCallResult;
 
     const textBlocks = (result.content ?? [])
-      .filter((b): b is McpContentBlock & { type: "text"; text: string } =>
-        b.type === "text" && typeof b.text === "string"
+      .filter(
+        (b): b is McpContentBlock & { type: "text"; text: string } =>
+          b.type === "text" && typeof b.text === "string",
       )
       .map((b) => b.text);
 
@@ -218,9 +223,12 @@ export class McpClient {
   /**
    * Introspect a specific type or field in the schema.
    */
-  async introspect(query: string): Promise<string> {
+  async introspect(typeName: string): Promise<string> {
     try {
-      return await this.callTool("introspect", { query, depth: 1 });
+      return await this.callTool("introspect", {
+        type_name: typeName,
+        depth: 1,
+      });
     } catch {
       return "";
     }
@@ -236,7 +244,10 @@ export class McpClient {
 
       // Try JSON first (future-proofing for structured responses)
       try {
-        const parsed = JSON.parse(text) as { valid?: boolean; errors?: string[] };
+        const parsed = JSON.parse(text) as {
+          valid?: boolean;
+          errors?: string[];
+        };
         if (typeof parsed.valid === "boolean") {
           return {
             valid: parsed.valid,
@@ -294,7 +305,10 @@ export class McpClient {
       const lines =
         errors.length > 0
           ? errors
-          : trimmed.split("\n").map((l) => l.trim()).filter((l) => l.length > 0);
+          : trimmed
+              .split("\n")
+              .map((l) => l.trim())
+              .filter((l) => l.length > 0);
 
       return { valid: false, errors: lines };
     } catch {
@@ -308,7 +322,10 @@ export class McpClient {
    */
   async listTools(): Promise<string[]> {
     try {
-      const result = (await this.callJsonRpc("tools/list", {})) as McpToolsListResult;
+      const result = (await this.callJsonRpc(
+        "tools/list",
+        {},
+      )) as McpToolsListResult;
       return (result.tools ?? []).map((t) => t.name);
     } catch {
       return [];
