@@ -1,6 +1,6 @@
 {
   "name": "graphql-embedding-operation",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Generate dynamic GraphQL operations from embedded schemas",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

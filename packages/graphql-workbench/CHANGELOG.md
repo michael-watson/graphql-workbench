@@ -4,6 +4,14 @@ All notable changes to GraphQL Workbench are documented here.
 
 ---
 
+## [0.4.1](https://github.com/michael-watson/graphql-workbench/compare/graphql-workbench-v0.4.0...graphql-workbench-v0.4.1) (2026-03-02)
+
+
+### Bug Fixes
+
+* **dynamic-generator:** break out of validation loop on empty introspect or stalled errors ([#33](https://github.com/michael-watson/graphql-workbench/issues/33)) ([b6277ba](https://github.com/michael-watson/graphql-workbench/commit/b6277ba3600e3c86ca49997faa556aeea684702f))
+* **mcp-validation:** Fix Apollo MCP Server tool calls and errors returned from validate ([#31](https://github.com/michael-watson/graphql-workbench/issues/31)) ([f662674](https://github.com/michael-watson/graphql-workbench/commit/f662674f9cf74f84754985f33a182112a5454f33))
+
 ## [0.4.0](https://github.com/michael-watson/graphql-workbench/compare/graphql-workbench-v0.3.1...graphql-workbench-v0.4.0) (2026-03-02)
 
 
