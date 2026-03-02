@@ -13,7 +13,8 @@ jobs:
     name: Release Please
     runs-on: ubuntu-latest
     outputs:
-      release_created: ${{ steps.release.outputs.releases_created }}
+      # True only when graphql-workbench itself gets a release (not library-only bumps)
+      workbench_released: ${{ steps.release.outputs['packages/graphql-workbench--release_created'] }}
       tag_name: ${{ steps.release.outputs['packages/graphql-workbench--tag_name'] }}
     steps:
       - uses: googleapis/release-please-action@v4
@@ -22,3 +23,85 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+
+  build:
+    name: Build VSIX (${{ matrix.target }})
+    needs: release-please
+    if: ${{ needs.release-please.outputs.workbench_released == 'true' }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # All VS Code platforms with a matching node-llama-cpp binary.
+        # Alpine (musl libc) and web (native modules) are not supported.
+        target:
+          - linux-x64
+          - linux-arm64
+          - linux-armhf
+          - darwin-arm64
+          - darwin-x64
+          - win32-x64
+          - win32-arm64
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.release-please.outputs.tag_name }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build monorepo
+        run: npm run build
+
+      - name: Package VSIX
+        run: npm run package -w packages/graphql-workbench -- --target ${{ matrix.target }}
+
+      - name: Upload VSIX artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vsix-${{ matrix.target }}
+          path: packages/graphql-workbench/*.vsix
+
+  upload:
+    name: Upload VSIXes to Release
+    needs: [release-please, build]
+    if: ${{ needs.release-please.outputs.workbench_released == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download all VSIXes
+        uses: actions/download-artifact@v4
+        with:
+          path: vsix-artifacts
+          pattern: vsix-*
+          merge-multiple: true
+
+      - name: Upload VSIXes to GitHub Release
+        run: gh release upload "${{ needs.release-please.outputs.tag_name }}" vsix-artifacts/*.vsix
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+
+  publish:
+    name: Publish to Marketplace
+    needs: [release-please, upload]
+    if: ${{ needs.release-please.outputs.workbench_released == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all VSIXes
+        uses: actions/download-artifact@v4
+        with:
+          path: vsix-artifacts
+          pattern: vsix-*
+          merge-multiple: true
+
+      - name: Publish all platform VSIXes
+        run: |
+          npm install -g @vscode/vsce
+          vsce publish --packagePath $(find . -iname '*.vsix')
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
