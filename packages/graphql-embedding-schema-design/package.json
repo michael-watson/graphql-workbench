@@ -1,6 +1,6 @@
 {
   "name": "graphql-embedding-schema-design",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Analyze GraphQL schemas against design best practices using embedded documents and LLMs",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
