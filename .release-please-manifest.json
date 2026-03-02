@@ -1,8 +1,8 @@
 {
-  "packages/graphql-workbench": "0.3.1",
-  "packages/graphql-embedding-core": "0.1.0",
+  "packages/graphql-workbench": "0.4.0",
+  "packages/graphql-embedding-core": "0.2.0",
   "packages/graphql-embedding-parser": "0.1.0",
-  "packages/graphql-embedding-operation": "0.1.0",
+  "packages/graphql-embedding-operation": "0.2.0",
   "packages/graphql-embedding-schema-design": "0.1.0",
   "packages/graphql-embedding": "0.1.0"
 }
