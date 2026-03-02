@@ -1012,23 +1012,29 @@ export class DynamicOperationGenerator {
       requiredArgsInstruction = `\n\nCRITICAL: The following arguments are REQUIRED and must be present in the fixed operation:\n${argList}`;
     }
 
-    // Extract the type names that have "does not have a field" errors so the LLM
-    // knows exactly which types to introspect before guessing field names.
-    const missingFieldTypes = new Set<string>();
+    // Extract type→missingFields map from "does not have a field" errors.
+    const missingFieldsByType = new Map<string, Set<string>>();
     for (const err of errors) {
-      const match = err.match(/type [`'"]?(\w+)[`'"]? does not have a field/i);
-      if (match?.[1]) {
-        missingFieldTypes.add(match[1]);
+      const match = err.match(/type [`'"]?(\w+)[`'"]? does not have a field [`'"]?(\w+)[`'"]/i);
+      if (match?.[1] && match?.[2]) {
+        const existing = missingFieldsByType.get(match[1]) ?? new Set<string>();
+        existing.add(match[2]);
+        missingFieldsByType.set(match[1], existing);
+      } else {
+        // Fallback: extract type only (no field captured)
+        const typeOnly = err.match(/type [`'"]?(\w+)[`'"]? does not have a field/i);
+        if (typeOnly?.[1] && !missingFieldsByType.has(typeOnly[1])) {
+          missingFieldsByType.set(typeOnly[1], new Set<string>());
+        }
       }
     }
 
     const mcpClient = this.getMcpClient();
-    const typesToIntrospect = [...missingFieldTypes];
 
     const messages: ChatMessage[] = [
       {
         role: "system",
-        content: `You are a GraphQL expert. Fix the errors in the provided GraphQL operation. Return ONLY the corrected operation in a \`\`\`graphql code block. Only use fields that are explicitly listed in the schema context provided.${requiredArgsInstruction}`,
+        content: `You are a GraphQL expert. Fix the errors in the provided GraphQL operation. Return ONLY the corrected operation in a \`\`\`graphql code block. Use ONLY the fields shown in the schema context — never invent or guess field names.${requiredArgsInstruction}`,
       },
     ];
 
@@ -1040,23 +1046,43 @@ export class DynamicOperationGenerator {
       });
     }
 
-    // Pre-emptively introspect any types that have "does not have a field" errors.
-    // We do this in code (not by asking the LLM to call a tool) so it always happens.
-    // Log via the OperationLogger so the calls appear in the playground UI.
-    if (mcpClient && typesToIntrospect.length > 0) {
-      for (const typeName of typesToIntrospect) {
-        this.log(`[Fix] Pre-introspecting type: ${typeName}`);
+    // For each type with "does not have a field" errors:
+    //   1. Introspect the type to show what fields it actually has
+    //   2. Search for each missing field name to find where it truly lives
+    // Both calls are made in code (not relying on LLM tool use) and logged to the UI.
+    const introspectSummaries: string[] = [];
+    if (mcpClient && missingFieldsByType.size > 0) {
+      for (const [typeName, missingFields] of missingFieldsByType.entries()) {
+        // Introspect the type
+        this.log(`[Fix] Introspecting type: ${typeName}`);
         this.logger?.onToolCall?.("introspect", typeName);
         const typeInfo = await mcpClient.introspect(typeName);
         this.logger?.onToolResult?.("introspect", typeInfo.length);
         if (typeInfo) {
-          this.log(`[Fix] Got schema for ${typeName} (${typeInfo.length} chars)`);
+          this.log(`[Fix] Schema for ${typeName} (${typeInfo.length} chars): ${typeInfo.substring(0, 120)}`);
           messages.push({
             role: "assistant",
-            content: `Actual schema for type ${typeName} (use ONLY these fields):\n${typeInfo}`,
+            content: `Fields available on type ${typeName} (use ONLY these):\n${typeInfo}`,
           });
+          introspectSummaries.push(`${typeName}: see schema above`);
         } else {
-          this.log(`[Fix] introspect("${typeName}") returned empty — MCP server may not know this type`);
+          this.log(`[Fix] introspect("${typeName}") returned empty`);
+          introspectSummaries.push(`${typeName}: no schema returned`);
+        }
+
+        // Search for each missing field name to find where it actually lives
+        for (const fieldName of missingFields) {
+          this.log(`[Fix] Searching for field: ${fieldName}`);
+          this.logger?.onToolCall?.("search", fieldName);
+          const searchResult = await mcpClient.search(fieldName);
+          this.logger?.onToolResult?.("search", searchResult.length);
+          if (searchResult) {
+            this.log(`[Fix] Search("${fieldName}"): ${searchResult.length} chars`);
+            messages.push({
+              role: "assistant",
+              content: `Schema search for "${fieldName}" (shows where this concept actually lives):\n${searchResult}`,
+            });
+          }
         }
       }
     }
@@ -1067,10 +1093,9 @@ export class DynamicOperationGenerator {
         ? `\n\nRemember: ALL required arguments must be included: ${requiredArgs.map((a: { name: string; type: string }) => `${a.name} (${a.type})`).join(", ")}`
         : "";
 
-    const typeNote =
-      typesToIntrospect.length > 0
-        ? `\n\nThe actual schema for ${typesToIntrospect.join(", ")} is provided above. Use ONLY the fields listed there — do not invent or guess field names.`
-        : "";
+    const typeNote = missingFieldsByType.size > 0
+      ? `\n\nThe schema context above shows what fields each type actually has. Do NOT use any field that is not listed in that context. If the missing fields exist on a different type or path, use the search results above to find the correct path.`
+      : "";
 
     const userPrompt = `The following GraphQL operation has errors:
 
@@ -1083,7 +1108,7 @@ ${errors.map((e) => `- ${e}`).join("\n")}
 
 Original request: "${inputText}"
 ${typeNote}
-Please fix the operation using only fields that actually exist in the schema.${requiredArgsSuffix}`;
+Rewrite the operation using only fields that actually exist in the schema. If the fields needed for the original request are not available on the current types, use the search results above to find the correct path to that data.${requiredArgsSuffix}`;
 
     messages.push({
       role: "user",
@@ -1091,8 +1116,8 @@ Please fix the operation using only fields that actually exist in the schema.${r
     });
 
     this.log(`Sending fix request to LLM with ${context.length} schema documents`);
-    if (typesToIntrospect.length > 0) {
-      this.log(`[Fix] Injected live schema for: ${typesToIntrospect.join(", ")}`);
+    if (missingFieldsByType.size > 0) {
+      this.log(`[Fix] Injected live schema for: ${[...missingFieldsByType.keys()].join(", ")}`);
     }
 
     const response = await this.callLLMWithMcpTools(messages, {
