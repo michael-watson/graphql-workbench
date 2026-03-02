@@ -209,7 +209,7 @@ export class McpClient {
    */
   async search(query: string): Promise<string> {
     try {
-      return await this.callTool("Search", { query });
+      return await this.callTool("search", { query });
     } catch {
       return "";
     }
@@ -220,7 +220,7 @@ export class McpClient {
    */
   async introspect(query: string): Promise<string> {
     try {
-      return await this.callTool("Introspect", { query, depth: 1 });
+      return await this.callTool("introspect", { query, depth: 1 });
     } catch {
       return "";
     }
@@ -232,7 +232,7 @@ export class McpClient {
    */
   async validate(operation: string): Promise<McpValidationResult | null> {
     try {
-      const text = await this.callTool("Validate", { operation });
+      const text = await this.callTool("validate", { operation });
 
       // Parse the validate response. Apollo MCP Server returns plain text or JSON.
       // Try JSON first, then look for error patterns in plain text.

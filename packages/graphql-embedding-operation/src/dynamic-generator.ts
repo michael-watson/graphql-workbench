@@ -29,7 +29,7 @@ const GRAPHQL_SCALARS = new Set([
 /** MCP tool definitions exposed to the LLM during operation generation. */
 const MCP_TOOLS: McpToolDefinition[] = [
   {
-    name: "Search",
+    name: "search",
     description:
       "Search the GraphQL schema for relevant types, fields, and documents by keyword. Use this when you need to find information about specific entities or operations in the schema.",
     inputSchema: {
@@ -44,7 +44,7 @@ const MCP_TOOLS: McpToolDefinition[] = [
     },
   },
   {
-    name: "Introspect",
+    name: "introspect",
     description:
       "Introspect a specific GraphQL type or field name to get its full schema definition including all fields, arguments, and descriptions.",
     inputSchema: {
@@ -119,14 +119,14 @@ export class DynamicOperationGenerator {
         async (name, args) => {
           const query = (args["query"] as string) ?? "";
           this.log(`[MCP] LLM called tool: ${name}("${query}")`);
-          if (name === "Search") {
+          if (name === "search") {
             this.logger?.onToolCall?.(name, query);
             const result = await mcpClient.search(query);
             this.log(`[MCP] Search result length: ${result.length} chars`);
             this.logger?.onToolResult?.(name, result.length);
             return result || "(no results)";
           }
-          if (name === "Introspect") {
+          if (name === "introspect") {
             this.logger?.onToolCall?.(name, query);
             const result = await mcpClient.introspect(query);
             this.log(`[MCP] Introspect result length: ${result.length} chars`);
@@ -154,7 +154,7 @@ export class DynamicOperationGenerator {
     this.log("[MCP] Validating operation via Apollo MCP Server...");
     const result = await mcpClient.validate(operation);
     if (!result) {
-      this.log("[MCP] MCP server unreachable, falling back to local validation");
+      this.log("[MCP] MCP validate tool unavailable, falling back to local validation");
       return null;
     }
     this.log(`[MCP] Validation result: ${result.valid ? "VALID" : "INVALID"} (${result.errors.length} errors)`);
