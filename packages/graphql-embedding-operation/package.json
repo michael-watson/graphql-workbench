@@ -31,8 +31,8 @@
   "license": "MIT",
   "dependencies": {
     "graphql": "^16.8.1",
-    "graphql-embedding-core": "^0.1.0",
-    "graphql-embedding-parser": "^0.1.0"
+    "graphql-embedding-core": "*",
+    "graphql-embedding-parser": "*"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",

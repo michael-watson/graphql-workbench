@@ -1,7 +1,20 @@
-import { parse, validate, type GraphQLSchema, type GraphQLError } from "graphql";
+import {
+  parse,
+  validate,
+  type GraphQLSchema,
+  type GraphQLError,
+} from "graphql";
 import type { VectorStore } from "graphql-embedding-core";
-import type { EmbeddingDocument, RootOperationType } from "graphql-embedding-parser";
-import type { LLMProvider, LLMToolProvider, McpToolDefinition, ChatMessage } from "graphql-embedding-core";
+import type {
+  EmbeddingDocument,
+  RootOperationType,
+} from "graphql-embedding-parser";
+import type {
+  LLMProvider,
+  LLMToolProvider,
+  McpToolDefinition,
+  ChatMessage,
+} from "graphql-embedding-core";
 import { McpClient } from "./mcp-client.js";
 import type {
   DynamicOperationOptions,
@@ -14,13 +27,7 @@ import type {
 } from "./types.js";
 
 /** Built-in GraphQL scalar types to skip during type discovery */
-const GRAPHQL_SCALARS = new Set([
-  "ID",
-  "String",
-  "Int",
-  "Float",
-  "Boolean",
-]);
+const GRAPHQL_SCALARS = new Set(["ID", "String", "Int", "Float", "Boolean"]);
 
 /**
  * Generates GraphQL operations dynamically using LLM and vector similarity search.
@@ -29,7 +36,7 @@ const GRAPHQL_SCALARS = new Set([
 /** MCP tool definitions exposed to the LLM during operation generation. */
 const MCP_TOOLS: McpToolDefinition[] = [
   {
-    name: "Search",
+    name: "search",
     description:
       "Search the GraphQL schema for relevant types, fields, and documents by keyword. Use this when you need to find information about specific entities or operations in the schema.",
     inputSchema: {
@@ -44,7 +51,7 @@ const MCP_TOOLS: McpToolDefinition[] = [
     },
   },
   {
-    name: "Introspect",
+    name: "introspect",
     description:
       "Introspect a specific GraphQL type or field name to get its full schema definition including all fields, arguments, and descriptions.",
     inputSchema: {
@@ -106,27 +113,29 @@ export class DynamicOperationGenerator {
    */
   private async callLLMWithMcpTools(
     messages: ChatMessage[],
-    options?: { temperature?: number; maxTokens?: number }
+    options?: { temperature?: number; maxTokens?: number },
   ): Promise<string> {
     const mcpClient = this.getMcpClient();
-    const toolProvider = (this.llmProvider as unknown as LLMToolProvider);
+    const toolProvider = this.llmProvider as unknown as LLMToolProvider;
 
     if (mcpClient && toolProvider.supportsTools === true) {
-      this.log("[MCP] Using tool-enabled LLM call (Search + Introspect available)");
+      this.log(
+        "[MCP] Using tool-enabled LLM call (Search + Introspect available)",
+      );
       return toolProvider.completeWithTools(
         messages,
         MCP_TOOLS,
         async (name, args) => {
           const query = (args["query"] as string) ?? "";
           this.log(`[MCP] LLM called tool: ${name}("${query}")`);
-          if (name === "Search") {
+          if (name === "search") {
             this.logger?.onToolCall?.(name, query);
             const result = await mcpClient.search(query);
             this.log(`[MCP] Search result length: ${result.length} chars`);
             this.logger?.onToolResult?.(name, result.length);
             return result || "(no results)";
           }
-          if (name === "Introspect") {
+          if (name === "introspect") {
             this.logger?.onToolCall?.(name, query);
             const result = await mcpClient.introspect(query);
             this.log(`[MCP] Introspect result length: ${result.length} chars`);
@@ -135,7 +144,7 @@ export class DynamicOperationGenerator {
           }
           return `Unknown tool: ${name}`;
         },
-        options
+        options,
       );
     }
 
@@ -147,17 +156,25 @@ export class DynamicOperationGenerator {
    * Returns null if the MCP server is not configured or unreachable.
    * Does NOT involve the LLM.
    */
-  private async validateWithMcp(operation: string): Promise<ValidationResult | null> {
+  private async validateWithMcp(
+    operation: string,
+  ): Promise<ValidationResult | null> {
     const mcpClient = this.getMcpClient();
     if (!mcpClient) return null;
 
     this.log("[MCP] Validating operation via Apollo MCP Server...");
     const result = await mcpClient.validate(operation);
     if (!result) {
-      this.log("[MCP] MCP server unreachable, falling back to local validation");
+      this.log(
+        "[MCP] MCP validate tool unavailable, falling back to local validation",
+      );
       return null;
     }
-    this.log(`[MCP] Validation result: ${result.valid ? "VALID" : "INVALID"} (${result.errors.length} errors)`);
+    this.log(
+      `[MCP] Validation result: ${result.valid ? "VALID" : "INVALID"} (${
+        result.errors.length
+      } errors)`,
+    );
     return result;
   }
 
@@ -172,22 +189,26 @@ export class DynamicOperationGenerator {
    */
   private async generateFromMcpSearch(
     inputText: string,
-    maxValidationRetries: number
+    maxValidationRetries: number,
   ): Promise<DynamicGeneratedOperation> {
     const mcpClient = this.getMcpClient()!;
 
     this.log("\n--- MCP FALLBACK: Searching schema via Apollo MCP Server ---");
     const mcpContext = await mcpClient.search(inputText);
-    this.log(`[MCP] Search returned ${mcpContext.length} chars of schema context`);
+    this.log(
+      `[MCP] Search returned ${mcpContext.length} chars of schema context`,
+    );
 
     if (!mcpContext.trim()) {
       throw new Error(
-        "No relevant schema documents found — vector search returned no results and the MCP Search tool returned nothing."
+        "No relevant schema documents found — vector search returned no results and the MCP Search tool returned nothing.",
       );
     }
 
     // Generate the operation using the MCP search result as schema context
-    this.log("\n--- MCP FALLBACK: Generating operation from MCP schema context ---");
+    this.log(
+      "\n--- MCP FALLBACK: Generating operation from MCP schema context ---",
+    );
     const messages: ChatMessage[] = [
       {
         role: "system",
@@ -232,12 +253,13 @@ export class DynamicOperationGenerator {
 
     // Run the standard validation loop (uses MCP validate or local, same as normal path)
     this.log("\n--- MCP FALLBACK: Validating operation ---");
-    const { operation: validatedOperation, attempts } = await this.validateAndRetry(
-      operation,
-      [],
-      inputText,
-      maxValidationRetries
-    );
+    const { operation: validatedOperation, attempts } =
+      await this.validateAndRetry(
+        operation,
+        [],
+        inputText,
+        maxValidationRetries,
+      );
 
     this.log(`Validation completed after ${attempts} attempt(s)`);
 
@@ -264,7 +286,7 @@ export class DynamicOperationGenerator {
    */
   async generateDynamicOperation(
     context: GenerationContext,
-    runtimeOptions?: GenerationRuntimeOptions
+    runtimeOptions?: GenerationRuntimeOptions,
   ): Promise<DynamicGeneratedOperation> {
     const { inputVector, inputText } = context;
 
@@ -272,9 +294,11 @@ export class DynamicOperationGenerator {
     this.embeddingDimensions = inputVector.length;
 
     // Use runtime options if provided, otherwise fall back to constructor defaults
-    const minSimilarityScore = runtimeOptions?.minSimilarityScore ?? this.minSimilarityScore;
+    const minSimilarityScore =
+      runtimeOptions?.minSimilarityScore ?? this.minSimilarityScore;
     const maxDocuments = runtimeOptions?.maxDocuments ?? this.maxDocuments;
-    const maxValidationRetries = runtimeOptions?.maxValidationRetries ?? this.maxValidationRetries;
+    const maxValidationRetries =
+      runtimeOptions?.maxValidationRetries ?? this.maxValidationRetries;
 
     this.log("=".repeat(60));
     this.log("DYNAMIC OPERATION GENERATION STARTED");
@@ -284,25 +308,47 @@ export class DynamicOperationGenerator {
 
     // Step 3-4: Search for relevant root fields
     this.log("\n--- STEP 3-4: Searching for relevant root fields ---");
-    this.log(`Parameters: minSimilarityScore=${minSimilarityScore}, maxDocuments=${maxDocuments}`);
+    this.log(
+      `Parameters: minSimilarityScore=${minSimilarityScore}, maxDocuments=${maxDocuments}`,
+    );
     let currentScore = minSimilarityScore;
-    let searchResults = await this.searchRootFields(inputVector, currentScore, maxDocuments);
+    let searchResults = await this.searchRootFields(
+      inputVector,
+      currentScore,
+      maxDocuments,
+    );
 
     while (searchResults.length === 0 && currentScore - 0.05 >= 0) {
       currentScore = Math.round((currentScore - 0.05) * 100) / 100;
-      this.log(`No results at similarity >= ${(currentScore + 0.05).toFixed(2)}, retrying with >= ${currentScore.toFixed(2)}`);
-      searchResults = await this.searchRootFields(inputVector, currentScore, maxDocuments);
+      this.log(
+        `No results at similarity >= ${(currentScore + 0.05).toFixed(
+          2,
+        )}, retrying with >= ${currentScore.toFixed(2)}`,
+      );
+      searchResults = await this.searchRootFields(
+        inputVector,
+        currentScore,
+        maxDocuments,
+      );
     }
 
-    this.log(`Found ${searchResults.length} root operation fields with similarity >= ${currentScore}`);
+    this.log(
+      `Found ${searchResults.length} root operation fields with similarity >= ${currentScore}`,
+    );
     if (searchResults.length > 0) {
-      const minScore = Math.min(...searchResults.map(r => r.score));
-      const maxScore = Math.max(...searchResults.map(r => r.score));
+      const minScore = Math.min(...searchResults.map((r) => r.score));
+      const maxScore = Math.max(...searchResults.map((r) => r.score));
       this.log(`Score range: ${minScore.toFixed(4)} - ${maxScore.toFixed(4)}`);
       this.log("\nTop matching root fields:");
       for (const r of searchResults.slice(0, 10)) {
-        this.log(`  [score=${r.score.toFixed(4)}] ${r.document.metadata.rootOperationType}.${r.document.name}`);
-        this.log(`           Content: ${r.document.content.substring(0, 100)}...`);
+        this.log(
+          `  [score=${r.score.toFixed(4)}] ${
+            r.document.metadata.rootOperationType
+          }.${r.document.name}`,
+        );
+        this.log(
+          `           Content: ${r.document.content.substring(0, 100)}...`,
+        );
       }
       if (searchResults.length > 10) {
         this.log(`  ... and ${searchResults.length - 10} more`);
@@ -312,12 +358,18 @@ export class DynamicOperationGenerator {
     if (searchResults.length === 0) {
       const mcpClient = this.getMcpClient();
       if (mcpClient) {
-        this.log(`[MCP] No vector results — short-circuiting to MCP Search with query: "${inputText}"`);
+        this.log(
+          `[MCP] No vector results — short-circuiting to MCP Search with query: "${inputText}"`,
+        );
         return this.generateFromMcpSearch(inputText, maxValidationRetries);
       }
-      this.log(`ERROR: No root fields found even after reducing similarity to ${currentScore.toFixed(2)}`);
+      this.log(
+        `ERROR: No root fields found even after reducing similarity to ${currentScore.toFixed(
+          2,
+        )}`,
+      );
       throw new Error(
-        "No relevant root fields found in the schema for the given input"
+        "No relevant root fields found in the schema for the given input",
       );
     }
 
@@ -325,7 +377,7 @@ export class DynamicOperationGenerator {
     this.log("\n--- STEP 5-6: Determining root operation type via LLM ---");
     const operationType = await this.determineRootOperationType(
       searchResults,
-      inputText
+      inputText,
     );
     this.log(`LLM determined operation type: ${operationType}`);
 
@@ -333,33 +385,39 @@ export class DynamicOperationGenerator {
     this.log("\n--- STEP 7: Filtering results by operation type ---");
     const filteredResults = this.filterByOperationType(
       searchResults,
-      operationType
+      operationType,
     );
     this.log(`Filtered to ${filteredResults.length} ${operationType} fields`);
 
     if (filteredResults.length === 0) {
       this.log(`ERROR: No ${operationType} fields found!`);
-      throw new Error(
-        `No ${operationType} fields found in search results`
-      );
+      throw new Error(`No ${operationType} fields found in search results`);
     }
 
     this.log("\nFiltered fields:");
     for (const r of filteredResults) {
-      this.log(`  [${r.score.toFixed(4)}] ${r.document.name}: ${r.document.content.substring(0, 80)}...`);
+      this.log(
+        `  [${r.score.toFixed(4)}] ${
+          r.document.name
+        }: ${r.document.content.substring(0, 80)}...`,
+      );
     }
 
     // Step 8: Select most relevant field
     this.log("\n--- STEP 8: Selecting most relevant field via LLM ---");
     const selectedField = await this.selectMostRelevantField(
       filteredResults,
-      inputText
+      inputText,
     );
     this.log(`Selected field: ${selectedField.name}`);
     this.log(`Field content: ${selectedField.content}`);
     this.log(`Return type: ${selectedField.metadata.fieldType}`);
     if (selectedField.metadata.arguments?.length) {
-      this.log(`Arguments: ${selectedField.metadata.arguments.map(a => `${a.name}: ${a.type}`).join(", ")}`);
+      this.log(
+        `Arguments: ${selectedField.metadata.arguments
+          .map((a) => `${a.name}: ${a.type}`)
+          .join(", ")}`,
+      );
     }
 
     // Step 9: Discover related types recursively
@@ -381,7 +439,7 @@ export class DynamicOperationGenerator {
     const { operation, variables } = await this.generateOperationWithLLM(
       selectedField,
       relatedTypes,
-      inputText
+      inputText,
     );
     this.log("\nGenerated operation:");
     this.log(operation);
@@ -398,7 +456,7 @@ export class DynamicOperationGenerator {
         operation,
         [selectedField, ...relatedTypes],
         inputText,
-        maxValidationRetries
+        maxValidationRetries,
       );
     this.log(`Validation completed after ${attempts} attempt(s)`);
 
@@ -418,12 +476,18 @@ export class DynamicOperationGenerator {
     return {
       operation: validatedOperation,
       variables,
-      operationType: operationType.toLowerCase() as "query" | "mutation" | "subscription",
+      operationType: operationType.toLowerCase() as
+        | "query"
+        | "mutation"
+        | "subscription",
       rootField: selectedField.name,
-      relevantDocuments: [...filteredResults, ...relatedTypes.map((d) => ({
-        document: d,
-        score: 1.0, // Types discovered via traversal don't have scores
-      }))],
+      relevantDocuments: [
+        ...filteredResults,
+        ...relatedTypes.map((d) => ({
+          document: d,
+          score: 1.0, // Types discovered via traversal don't have scores
+        })),
+      ],
       validationAttempts: attempts,
     };
   }
@@ -437,22 +501,31 @@ export class DynamicOperationGenerator {
   private async searchRootFields(
     inputVector: number[],
     minSimilarityScore: number,
-    maxDocuments: number
+    maxDocuments: number,
   ): Promise<FilteredSearchResult[]> {
-    const results = await this.vectorStore.search(inputVector, {
+    const results = (await this.vectorStore.search(inputVector, {
       limit: maxDocuments,
       metadataFilters: [
-        { field: "parentType", operator: "in", value: ["Query", "Mutation", "Subscription"] },
+        {
+          field: "parentType",
+          operator: "in",
+          value: ["Query", "Mutation", "Subscription"],
+        },
       ],
-    }) as FilteredSearchResult[];
+    })) as FilteredSearchResult[];
 
-    this.log(`Vector store returned ${results.length} root operation fields (filtered at SQL level)`);
+    this.log(
+      `Vector store returned ${results.length} root operation fields (filtered at SQL level)`,
+    );
 
     // Enrich results with rootOperationType if not set (for older parser data)
     for (const r of results) {
-      if (!r.document.metadata.rootOperationType && r.document.metadata.parentType) {
-        r.document.metadata.rootOperationType =
-          r.document.metadata.parentType as RootOperationType;
+      if (
+        !r.document.metadata.rootOperationType &&
+        r.document.metadata.parentType
+      ) {
+        r.document.metadata.rootOperationType = r.document.metadata
+          .parentType as RootOperationType;
         r.document.metadata.isRootOperationField = true;
       }
     }
@@ -460,7 +533,9 @@ export class DynamicOperationGenerator {
     // Apply similarity score threshold
     const filtered = results.filter((r) => r.score >= minSimilarityScore);
 
-    this.log(`Found ${filtered.length} root operation fields with similarity >= ${minSimilarityScore}`);
+    this.log(
+      `Found ${filtered.length} root operation fields with similarity >= ${minSimilarityScore}`,
+    );
 
     return filtered;
   }
@@ -470,7 +545,7 @@ export class DynamicOperationGenerator {
    */
   private async determineRootOperationType(
     results: FilteredSearchResult[],
-    inputText: string
+    inputText: string,
   ): Promise<RootOperationType> {
     const messages: ChatMessage[] = [];
 
@@ -490,7 +565,9 @@ export class DynamicOperationGenerator {
       content: userPrompt,
     });
 
-    this.log(`Sending ${messages.length} messages to LLM (${results.length} assistant + 1 user)`);
+    this.log(
+      `Sending ${messages.length} messages to LLM (${results.length} assistant + 1 user)`,
+    );
     this.log(`User prompt: ${userPrompt}`);
 
     const response = await this.llmProvider.complete(messages, {
@@ -517,10 +594,10 @@ export class DynamicOperationGenerator {
    */
   private filterByOperationType(
     results: FilteredSearchResult[],
-    operationType: RootOperationType
+    operationType: RootOperationType,
   ): FilteredSearchResult[] {
     return results.filter(
-      (r) => r.document.metadata.rootOperationType === operationType
+      (r) => r.document.metadata.rootOperationType === operationType,
     );
   }
 
@@ -529,7 +606,7 @@ export class DynamicOperationGenerator {
    */
   private async selectMostRelevantField(
     filtered: FilteredSearchResult[],
-    inputText: string
+    inputText: string,
   ): Promise<EmbeddingDocument> {
     const messages: ChatMessage[] = [
       {
@@ -554,8 +631,12 @@ export class DynamicOperationGenerator {
       content: userPrompt,
     });
 
-    this.log(`Sending ${messages.length} messages to LLM (1 system + ${filtered.length} assistant + 1 user)`);
-    this.log(`Candidate field IDs: ${filtered.map(r => r.document.id).join(", ")}`);
+    this.log(
+      `Sending ${messages.length} messages to LLM (1 system + ${filtered.length} assistant + 1 user)`,
+    );
+    this.log(
+      `Candidate field IDs: ${filtered.map((r) => r.document.id).join(", ")}`,
+    );
 
     const response = await this.llmProvider.complete(messages, {
       temperature: 0.1,
@@ -574,17 +655,25 @@ export class DynamicOperationGenerator {
     }
 
     // If exact match not found, try partial match or return highest scored
-    const partialMatch = filtered.find((r) =>
-      responseId.includes(r.document.id) || r.document.id.includes(responseId)
+    const partialMatch = filtered.find(
+      (r) =>
+        responseId.includes(r.document.id) ||
+        r.document.id.includes(responseId),
     );
 
     if (partialMatch) {
-      this.log(`Partial match found: LLM said "${responseId}", matched to "${partialMatch.document.id}"`);
+      this.log(
+        `Partial match found: LLM said "${responseId}", matched to "${partialMatch.document.id}"`,
+      );
       return partialMatch.document;
     }
 
     // Default to highest scored result
-    this.log(`No ID match found, falling back to highest scored field: ${filtered[0]!.document.name}`);
+    this.log(
+      `No ID match found, falling back to highest scored field: ${
+        filtered[0]!.document.name
+      }`,
+    );
     return filtered[0]!.document;
   }
 
@@ -592,14 +681,14 @@ export class DynamicOperationGenerator {
    * Step 9: Recursively discover all types referenced by the selected field
    */
   async discoverRelatedTypes(
-    rootField: EmbeddingDocument
+    rootField: EmbeddingDocument,
   ): Promise<EmbeddingDocument[]> {
     const discoveredTypes = new Map<string, EmbeddingDocument>();
     const typesToProcess: string[] = [];
 
     // Extract return type from field metadata
     const returnType = this.extractBaseTypeName(
-      rootField.metadata.fieldType ?? ""
+      rootField.metadata.fieldType ?? "",
     );
     if (returnType && !GRAPHQL_SCALARS.has(returnType)) {
       typesToProcess.push(returnType);
@@ -634,7 +723,7 @@ export class DynamicOperationGenerator {
           const fieldDocs = await this.findFieldsForType(typeName);
           for (const fieldDoc of fieldDocs) {
             const fieldType = this.extractBaseTypeName(
-              fieldDoc.metadata.fieldType ?? ""
+              fieldDoc.metadata.fieldType ?? "",
             );
             if (
               fieldType &&
@@ -683,13 +772,17 @@ export class DynamicOperationGenerator {
    * with a limit matching totalChunks to ensure completeness.
    */
   private async findTypeByName(
-    typeName: string
+    typeName: string,
   ): Promise<EmbeddingDocument | null> {
     const zeroVector = new Array(this.embeddingDimensions).fill(0) as number[];
     const searchFilters = {
       columnFilters: [
         { column: "name" as const, operator: "eq" as const, value: typeName },
-        { column: "type" as const, operator: "in" as const, value: ["object", "input", "interface", "union", "enum", "scalar"] },
+        {
+          column: "type" as const,
+          operator: "in" as const,
+          value: ["object", "input", "interface", "union", "enum", "scalar"],
+        },
       ],
     };
 
@@ -704,7 +797,9 @@ export class DynamicOperationGenerator {
 
     // Check if results are chunked documents
     let chunkedResults = results.filter(
-      (r) => r.document.metadata.chunkIndex !== undefined && r.document.metadata.totalChunks !== undefined
+      (r) =>
+        r.document.metadata.chunkIndex !== undefined &&
+        r.document.metadata.totalChunks !== undefined,
     );
 
     if (chunkedResults.length > 0) {
@@ -712,13 +807,17 @@ export class DynamicOperationGenerator {
 
       // If we don't have all chunks, re-query with the correct limit
       if (chunkedResults.length < totalChunks) {
-        this.log(`Found ${chunkedResults.length}/${totalChunks} chunks for ${typeName}, fetching all chunks...`);
+        this.log(
+          `Found ${chunkedResults.length}/${totalChunks} chunks for ${typeName}, fetching all chunks...`,
+        );
         results = await this.vectorStore.search(zeroVector, {
           limit: totalChunks,
           ...searchFilters,
         });
         chunkedResults = results.filter(
-          (r) => r.document.metadata.chunkIndex !== undefined && r.document.metadata.totalChunks !== undefined
+          (r) =>
+            r.document.metadata.chunkIndex !== undefined &&
+            r.document.metadata.totalChunks !== undefined,
         );
       }
 
@@ -736,10 +835,12 @@ export class DynamicOperationGenerator {
    * concatenates them under the shared type header.
    */
   private mergeChunkedDocuments(
-    chunkedResults: { document: EmbeddingDocument; score: number }[]
+    chunkedResults: { document: EmbeddingDocument; score: number }[],
   ): EmbeddingDocument {
     chunkedResults.sort(
-      (a, b) => (a.document.metadata.chunkIndex ?? 0) - (b.document.metadata.chunkIndex ?? 0)
+      (a, b) =>
+        (a.document.metadata.chunkIndex ?? 0) -
+        (b.document.metadata.chunkIndex ?? 0),
     );
 
     const firstChunk = chunkedResults[0]!.document;
@@ -759,7 +860,8 @@ export class DynamicOperationGenerator {
 
       const body = content.substring(braceIndex + 1);
       const closingIndex = body.lastIndexOf("}");
-      const fields = closingIndex !== -1 ? body.substring(0, closingIndex) : body;
+      const fields =
+        closingIndex !== -1 ? body.substring(0, closingIndex) : body;
       if (fields.trim()) {
         mergedFields.push(fields);
       }
@@ -783,13 +885,15 @@ export class DynamicOperationGenerator {
    * Find all field documents for a given parent type
    */
   private async findFieldsForType(
-    typeName: string
+    typeName: string,
   ): Promise<EmbeddingDocument[]> {
     const zeroVector = new Array(this.embeddingDimensions).fill(0) as number[];
     const results = await this.vectorStore.search(zeroVector, {
       limit: 100,
       columnFilters: [{ column: "type", operator: "eq", value: "field" }],
-      metadataFilters: [{ field: "parentType", operator: "eq", value: typeName }],
+      metadataFilters: [
+        { field: "parentType", operator: "eq", value: typeName },
+      ],
     });
 
     return results.map((r) => r.document);
@@ -801,12 +905,12 @@ export class DynamicOperationGenerator {
   async generateOperationWithLLM(
     rootField: EmbeddingDocument,
     types: EmbeddingDocument[],
-    inputText: string
+    inputText: string,
   ): Promise<{ operation: string; variables: Record<string, unknown> }> {
     // Identify required (non-null) arguments that must always be included
     const args = rootField.metadata.arguments ?? [];
     const requiredArgs = args.filter((a: { name: string; type: string }) =>
-      a.type.trim().endsWith("!")
+      a.type.trim().endsWith("!"),
     );
 
     let requiredArgsInstruction = "";
@@ -853,7 +957,9 @@ export class DynamicOperationGenerator {
       content: userPrompt,
     });
 
-    this.log(`Sending ${messages.length} messages to LLM for operation generation`);
+    this.log(
+      `Sending ${messages.length} messages to LLM for operation generation`,
+    );
     this.log(`System prompt: ${systemPrompt}`);
     this.log(`User prompt: ${userPrompt}`);
 
@@ -866,7 +972,8 @@ export class DynamicOperationGenerator {
     this.log(response);
 
     // Extract operation from ```graphql block
-    const operation = this.extractCodeBlock(response, "graphql") ||
+    const operation =
+      this.extractCodeBlock(response, "graphql") ||
       this.extractCodeBlock(response, "") ||
       response.trim();
 
@@ -904,7 +1011,7 @@ export class DynamicOperationGenerator {
     operation: string,
     context: EmbeddingDocument[],
     inputText: string,
-    maxRetries?: number
+    maxRetries?: number,
   ): Promise<{ operation: string; attempts: number }> {
     const maxValidationRetries = maxRetries ?? this.maxValidationRetries;
     let currentOperation = operation;
@@ -916,7 +1023,8 @@ export class DynamicOperationGenerator {
       // Prefer MCP validation (direct, no LLM), fall back to local parse/validate
       let validation: ValidationResult;
       const mcpResult = await this.validateWithMcp(currentOperation);
-      const validationMethod: "mcp" | "local" = mcpResult !== null ? "mcp" : "local";
+      const validationMethod: "mcp" | "local" =
+        mcpResult !== null ? "mcp" : "local";
       if (mcpResult !== null) {
         validation = mcpResult;
         this.log(`[MCP] Validation used: Apollo MCP Server`);
@@ -925,7 +1033,14 @@ export class DynamicOperationGenerator {
         this.log(`[Local] Validation used: local GraphQL parser/validator`);
       }
 
-      this.logger?.onValidationAttempt?.(attempts, maxValidationRetries, validation.valid, validation.errors, currentOperation, validationMethod);
+      this.logger?.onValidationAttempt?.(
+        attempts,
+        maxValidationRetries,
+        validation.valid,
+        validation.errors,
+        currentOperation,
+        validationMethod,
+      );
 
       if (validation.valid) {
         this.log("Validation PASSED");
@@ -948,7 +1063,7 @@ export class DynamicOperationGenerator {
         currentOperation,
         validation.errors,
         context,
-        inputText
+        inputText,
       );
       this.log("\nFixed operation:");
       this.log(currentOperation);
@@ -994,13 +1109,13 @@ export class DynamicOperationGenerator {
     operation: string,
     errors: string[],
     context: EmbeddingDocument[],
-    inputText: string
+    inputText: string,
   ): Promise<string> {
     // Re-derive required args from the root field (first context doc is the root field)
     const rootFieldDoc = context[0];
     const requiredArgs = rootFieldDoc
       ? (rootFieldDoc.metadata.arguments ?? []).filter(
-          (a: { name: string; type: string }) => a.type.trim().endsWith("!")
+          (a: { name: string; type: string }) => a.type.trim().endsWith("!"),
         )
       : [];
 
@@ -1012,25 +1127,93 @@ export class DynamicOperationGenerator {
       requiredArgsInstruction = `\n\nCRITICAL: The following arguments are REQUIRED and must be present in the fixed operation:\n${argList}`;
     }
 
+    // Extract type→missingFields map from validation errors.
+    // Both MCP (normalized) and local graphql-js use the same format:
+    //   "Cannot query field "schema" on type "Graph"."
+    const missingFieldsByType = new Map<string, Set<string>>();
+    for (const err of errors) {
+      const match = err.match(
+        /Cannot query field ["'`]?(\w+)["'`]? on type ["'`]?(\w+)["'`]/i,
+      );
+      if (match?.[1] && match?.[2]) {
+        const fieldName = match[1];
+        const typeName = match[2];
+        const existing = missingFieldsByType.get(typeName) ?? new Set<string>();
+        existing.add(fieldName);
+        missingFieldsByType.set(typeName, existing);
+      }
+    }
+
+    const mcpClient = this.getMcpClient();
+
     const messages: ChatMessage[] = [
       {
         role: "system",
-        content: `You are a GraphQL expert. Fix the errors in the provided GraphQL operation. Return ONLY the corrected operation in a \`\`\`graphql code block.${requiredArgsInstruction}`,
+        content: `You are a GraphQL expert. Fix the errors in the provided GraphQL operation. Return ONLY the corrected operation in a \`\`\`graphql code block. Use ONLY the fields shown in the schema context — never invent or guess field names.${requiredArgsInstruction}`,
       },
     ];
 
-    // Provide schema context
+    // Provide original schema context from vector store
     for (const doc of context) {
       messages.push({
         role: "assistant",
-        content: `Schema: ${doc.content}`,
+        content: doc.content,
       });
+    }
+
+    // If the vector search returned no documents, fall back to keyword search so the
+    // LLM has at least some schema context to work with.
+    if (mcpClient && context.length === 0) {
+      this.log(
+        `[Fix] No vector search results — falling back to MCP search for: "${inputText}"`,
+      );
+      this.logger?.onToolCall?.("search", inputText);
+      const searchResult = await mcpClient.search(inputText);
+      this.logger?.onToolResult?.("search", searchResult.length);
+      if (searchResult) {
+        this.log(`[Fix] Search fallback: ${searchResult.length} chars`);
+        messages.push({
+          role: "assistant",
+          content: `Schema search results for "${inputText}":\n${searchResult}`,
+        });
+      }
+    }
+
+    // Introspect any types that have "does not have a field" errors so the LLM
+    // knows exactly which fields are available on that type.
+    if (mcpClient && missingFieldsByType.size > 0) {
+      for (const [typeName] of missingFieldsByType.entries()) {
+        this.log(`[Fix] Introspecting type: ${typeName}`);
+        this.logger?.onToolCall?.("introspect", typeName);
+        const typeInfo = await mcpClient.introspect(typeName);
+        this.logger?.onToolResult?.("introspect", typeInfo.length);
+        if (typeInfo) {
+          this.log(
+            `[Fix] Schema for ${typeName} (${
+              typeInfo.length
+            } chars): ${typeInfo.substring(0, 120)}`,
+          );
+          messages.push({
+            role: "assistant",
+            content: `Fields available on type ${typeName} (use ONLY these fields — do not guess):\n${typeInfo}`,
+          });
+        } else {
+          this.log(`[Fix] introspect("${typeName}") returned empty`);
+        }
+      }
     }
 
     // Provide the broken operation and errors
     const requiredArgsSuffix =
       requiredArgs.length > 0
-        ? `\n\nRemember: ALL required arguments must be included: ${requiredArgs.map((a: { name: string; type: string }) => `${a.name} (${a.type})`).join(", ")}`
+        ? `\n\nRemember: ALL required arguments must be included: ${requiredArgs
+            .map((a: { name: string; type: string }) => `${a.name} (${a.type})`)
+            .join(", ")}`
+        : "";
+
+    const typeNote =
+      missingFieldsByType.size > 0
+        ? `\n\nThe introspection results above show the exact fields available on each failing type. Use ONLY those fields — do not invent or guess field names.`
         : "";
 
     const userPrompt = `The following GraphQL operation has errors:
@@ -1043,15 +1226,24 @@ Errors:
 ${errors.map((e) => `- ${e}`).join("\n")}
 
 Original request: "${inputText}"
-
-Please fix the operation and return only the corrected GraphQL operation.${requiredArgsSuffix}`;
+${typeNote}
+Rewrite the operation using only fields that actually exist in the schema context provided above.${requiredArgsSuffix}`;
 
     messages.push({
       role: "user",
       content: userPrompt,
     });
 
-    this.log(`Sending fix request to LLM with ${context.length} schema documents`);
+    this.log(
+      `Sending fix request to LLM with ${context.length} schema documents`,
+    );
+    if (missingFieldsByType.size > 0) {
+      this.log(
+        `[Fix] Injected live schema for: ${[...missingFieldsByType.keys()].join(
+          ", ",
+        )}`,
+      );
+    }
 
     const response = await this.callLLMWithMcpTools(messages, {
       temperature: 0.1,
@@ -1062,7 +1254,8 @@ Please fix the operation and return only the corrected GraphQL operation.${requi
     this.log(response);
 
     // Extract fixed operation
-    const fixedOperation = this.extractCodeBlock(response, "graphql") ||
+    const fixedOperation =
+      this.extractCodeBlock(response, "graphql") ||
       this.extractCodeBlock(response, "") ||
       response.trim();
 
@@ -1078,7 +1271,7 @@ Please fix the operation and return only the corrected GraphQL operation.${requi
   async searchRootFieldsOnly(
     inputVector: number[],
     minSimilarityScore?: number,
-    maxDocuments?: number
+    maxDocuments?: number,
   ): Promise<FilteredSearchResult[]> {
     const minScore = minSimilarityScore ?? this.minSimilarityScore;
     const maxDocs = maxDocuments ?? this.maxDocuments;
@@ -1086,12 +1279,24 @@ Please fix the operation and return only the corrected GraphQL operation.${requi
     this.embeddingDimensions = inputVector.length;
 
     let currentScore = minScore;
-    let searchResults = await this.searchRootFields(inputVector, currentScore, maxDocs);
+    let searchResults = await this.searchRootFields(
+      inputVector,
+      currentScore,
+      maxDocs,
+    );
 
     while (searchResults.length === 0 && currentScore - 0.05 >= 0) {
       currentScore = Math.round((currentScore - 0.05) * 100) / 100;
-      this.log(`No results at similarity >= ${(currentScore + 0.05).toFixed(2)}, retrying with >= ${currentScore.toFixed(2)}`);
-      searchResults = await this.searchRootFields(inputVector, currentScore, maxDocs);
+      this.log(
+        `No results at similarity >= ${(currentScore + 0.05).toFixed(
+          2,
+        )}, retrying with >= ${currentScore.toFixed(2)}`,
+      );
+      searchResults = await this.searchRootFields(
+        inputVector,
+        currentScore,
+        maxDocs,
+      );
     }
 
     return searchResults;
@@ -1102,7 +1307,7 @@ Please fix the operation and return only the corrected GraphQL operation.${requi
    */
   async determineOperationType(
     results: FilteredSearchResult[],
-    inputText: string
+    inputText: string,
   ): Promise<RootOperationType> {
     return this.determineRootOperationType(results, inputText);
   }
@@ -1113,13 +1318,19 @@ Please fix the operation and return only the corrected GraphQL operation.${requi
   async selectRootField(
     results: FilteredSearchResult[],
     operationType: RootOperationType,
-    inputText: string
-  ): Promise<{ field: EmbeddingDocument; filteredResults: FilteredSearchResult[] }> {
+    inputText: string,
+  ): Promise<{
+    field: EmbeddingDocument;
+    filteredResults: FilteredSearchResult[];
+  }> {
     const filteredResults = this.filterByOperationType(results, operationType);
     if (filteredResults.length === 0) {
       throw new Error(`No ${operationType} fields found in search results`);
     }
-    const field = await this.selectMostRelevantField(filteredResults, inputText);
+    const field = await this.selectMostRelevantField(
+      filteredResults,
+      inputText,
+    );
     return { field, filteredResults };
   }
 }

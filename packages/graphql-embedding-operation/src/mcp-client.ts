@@ -85,7 +85,9 @@ export class McpClient {
     });
 
     if (!initResponse.ok) {
-      throw new Error(`MCP initialize failed: ${initResponse.status} ${initResponse.statusText}`);
+      throw new Error(
+        `MCP initialize failed: ${initResponse.status} ${initResponse.statusText}`,
+      );
     }
 
     // Capture session ID if the server provides one
@@ -130,7 +132,7 @@ export class McpClient {
    */
   private async callJsonRpc(
     method: string,
-    params: Record<string, unknown>
+    params: Record<string, unknown>,
   ): Promise<unknown> {
     await this.ensureInitialized();
 
@@ -152,7 +154,9 @@ export class McpClient {
     });
 
     if (!response.ok) {
-      throw new Error(`MCP server responded with ${response.status}: ${response.statusText}`);
+      throw new Error(
+        `MCP server responded with ${response.status}: ${response.statusText}`,
+      );
     }
 
     const contentType = response.headers.get("content-type") ?? "";
@@ -188,7 +192,7 @@ export class McpClient {
    */
   private async callTool(
     name: string,
-    args: Record<string, unknown>
+    args: Record<string, unknown>,
   ): Promise<string> {
     const result = (await this.callJsonRpc("tools/call", {
       name,
@@ -196,8 +200,9 @@ export class McpClient {
     })) as McpToolCallResult;
 
     const textBlocks = (result.content ?? [])
-      .filter((b): b is McpContentBlock & { type: "text"; text: string } =>
-        b.type === "text" && typeof b.text === "string"
+      .filter(
+        (b): b is McpContentBlock & { type: "text"; text: string } =>
+          b.type === "text" && typeof b.text === "string",
       )
       .map((b) => b.text);
 
@@ -209,7 +214,7 @@ export class McpClient {
    */
   async search(query: string): Promise<string> {
     try {
-      return await this.callTool("Search", { query });
+      return await this.callTool("search", { query });
     } catch {
       return "";
     }
@@ -218,9 +223,12 @@ export class McpClient {
   /**
    * Introspect a specific type or field in the schema.
    */
-  async introspect(query: string): Promise<string> {
+  async introspect(typeName: string): Promise<string> {
     try {
-      return await this.callTool("Introspect", { query, depth: 1 });
+      return await this.callTool("introspect", {
+        type_name: typeName,
+        depth: 1,
+      });
     } catch {
       return "";
     }
@@ -232,34 +240,77 @@ export class McpClient {
    */
   async validate(operation: string): Promise<McpValidationResult | null> {
     try {
-      const text = await this.callTool("Validate", { operation });
+      const text = await this.callTool("validate", { operation });
 
-      // Parse the validate response. Apollo MCP Server returns plain text or JSON.
-      // Try JSON first, then look for error patterns in plain text.
+      // Try JSON first (future-proofing for structured responses)
       try {
-        const parsed = JSON.parse(text) as { valid?: boolean; errors?: string[] };
-        return {
-          valid: parsed.valid ?? true,
-          errors: parsed.errors ?? [],
+        const parsed = JSON.parse(text) as {
+          valid?: boolean;
+          errors?: string[];
         };
-      } catch {
-        // Plain text: look for error indicators
-        const lowerText = text.toLowerCase();
-        if (
-          lowerText.includes("error") ||
-          lowerText.includes("invalid") ||
-          lowerText.includes("unknown")
-        ) {
-          // Extract lines that look like errors
-          const errorLines = text
-            .split("\n")
-            .map((l) => l.trim())
-            .filter((l) => l.length > 0 && !l.startsWith("```"));
-          return { valid: false, errors: errorLines };
+        if (typeof parsed.valid === "boolean") {
+          return {
+            valid: parsed.valid,
+            errors: parsed.errors ?? [],
+          };
         }
-        // No error indicators — treat as valid
+      } catch {
+        // Not JSON — parse as plain text
+      }
+
+      // Apollo MCP Server returns "Operation is valid" on success.
+      // Any other non-empty response is a validation failure — use the text as the error.
+      const trimmed = text.trim();
+      if (!trimmed || trimmed === "Operation is valid") {
         return { valid: true, errors: [] };
       }
+
+      // Apollo MCP Server wraps each logical error in a multi-line ASCII diagnostic
+      // block. Normalize each error to graphql-js format so fixOperationErrors
+      // receives consistent errors regardless of which validator ran:
+      //   MCP:   "Error: type `Graph` does not have a field `schema`"
+      //          "Note: path to the field: `query Foo → graph → schema`"
+      //   →  "Cannot query field \"schema\" on type \"Graph\"."
+      //      "Note: path to the field: `query Foo → graph → schema`"
+      const rawLines = trimmed.split("\n").map((l) => l.trim());
+      const errors: string[] = [];
+      let i = 0;
+      while (i < rawLines.length) {
+        const line = rawLines[i]!;
+        if (/^Error:/i.test(line)) {
+          // Normalize "Error: type `X` does not have a field `Y`"
+          // → "Cannot query field "Y" on type "X"." (graphql-js format)
+          const fieldMatch = line.match(
+            /type [`'"]?(\w+)[`'"]? does not have a field [`'"]?(\w+)[`'"]/i,
+          );
+          const normalized = fieldMatch
+            ? `Cannot query field "${fieldMatch[2]}" on type "${fieldMatch[1]}".`
+            : line.replace(/^Error:\s*/i, "").trim();
+
+          // Pair with the following Note: line if present (provides path context)
+          const next = rawLines[i + 1] ?? "";
+          if (/^Note: path to the field:/i.test(next)) {
+            errors.push(`${normalized}\n${next}`);
+            i += 2;
+          } else {
+            errors.push(normalized);
+            i++;
+          }
+        } else {
+          i++;
+        }
+      }
+
+      // Fall back to all non-empty lines if the format didn't match (future-proofing)
+      const lines =
+        errors.length > 0
+          ? errors
+          : trimmed
+              .split("\n")
+              .map((l) => l.trim())
+              .filter((l) => l.length > 0);
+
+      return { valid: false, errors: lines };
     } catch {
       // Server unreachable or tool call failed
       return null;
@@ -271,7 +322,10 @@ export class McpClient {
    */
   async listTools(): Promise<string[]> {
     try {
-      const result = (await this.callJsonRpc("tools/list", {})) as McpToolsListResult;
+      const result = (await this.callJsonRpc(
+        "tools/list",
+        {},
+      )) as McpToolsListResult;
       return (result.tools ?? []).map((t) => t.name);
     } catch {
       return [];

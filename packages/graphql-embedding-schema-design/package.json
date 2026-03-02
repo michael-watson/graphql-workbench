@@ -31,7 +31,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "graphql-embedding-core": "^0.1.0"
+    "graphql-embedding-core": "*"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",
