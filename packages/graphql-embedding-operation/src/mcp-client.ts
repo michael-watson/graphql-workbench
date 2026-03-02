@@ -254,12 +254,22 @@ export class McpClient {
         return { valid: true, errors: [] };
       }
 
+      // Apollo MCP Server wraps each logical error in multi-line ASCII diagnostic
+      // blocks with source pointers, pipe characters, and underline art — all noise
+      // for an LLM. Extract only the two informative parts per error:
+      //   • "Error: ..." lines  — the actual error message
+      //   • "Note: path to the field: ..." lines  — the accessor path (useful context)
       const errorLines = trimmed
         .split("\n")
         .map((l) => l.trim())
-        .filter((l) => l.length > 0);
+        .filter((l) => /^Error:/i.test(l) || /^Note: path to the field:/i.test(l));
 
-      return { valid: false, errors: errorLines };
+      // Fall back to all non-empty lines if the format didn't match (future-proofing)
+      const lines = errorLines.length > 0
+        ? errorLines
+        : trimmed.split("\n").map((l) => l.trim()).filter((l) => l.length > 0);
+
+      return { valid: false, errors: lines };
     } catch {
       // Server unreachable or tool call failed
       return null;
