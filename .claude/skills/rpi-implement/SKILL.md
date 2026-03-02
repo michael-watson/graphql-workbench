@@ -191,7 +191,7 @@ Agent: Starting implementation of user authentication...
 ✓ Added test results
 
 [Creating commit]
-✓ Committed using git-commit-spec.sh: "Add User Authentication"
+✓ Committed using git-commit-spec.sh: "feat(auth): add user authentication"
 
 [Moving to completed]
 ✓ Moved spec from in-progress to completed folder
@@ -222,7 +222,7 @@ Agent: Implementing bug fix for discount codes...
 
 [Finalizing]
 ✓ Filled Implementation Summary
-✓ Committed using git-commit-spec.sh: "Fix Checkout Discount Code Validation"
+✓ Committed using git-commit-spec.sh: "fix(checkout): fix checkout discount code validation"
 ✓ Moved spec to completed folder
 
 Spec 000002 complete! Ready for next spec.
@@ -401,20 +401,33 @@ Run tests frequently during implementation.
 ### Using git-commit-spec.sh
 
 ```bash
-.rpi/scripts/helpers/git-commit-spec.sh .rpi/specs/completed/000001-add-user-authentication-completed.md
+# Minimal — type and scope inferred from spec filename
+.rpi/scripts/helpers/git-commit-spec.sh \
+  .rpi/specs/completed/000001-add-user-authentication-completed.md
+
+# Explicit type and scope (preferred — choose a short, meaningful scope)
+.rpi/scripts/helpers/git-commit-spec.sh \
+  .rpi/specs/completed/000001-add-user-authentication-completed.md \
+  --type feat \
+  --scope auth
 ```
+
+**Always pass `--type` and `--scope` explicitly.** The scope should be a short
+kebab-case keyword that describes the area changed (e.g., `auth`, `mcp-server`,
+`design-tree`, `embedding`, `ci`). This is what appears in the commit and in
+the PR title when the branch is merged.
 
 This creates a commit with:
 
-- Title from spec filename
-- Summary from Implementation Summary section
+- Conventional commit header (`type(scope): description`)
+- Body from Implementation Summary section
 - Spec ID reference
 - Co-Authored-By tag
 
 ### Commit Message Format
 
 ```
-Add User Authentication
+feat(auth): add user authentication
 
 Implemented JWT-based authentication with login/logout endpoints,
 authentication middleware, and comprehensive test coverage.
@@ -426,6 +439,8 @@ Spec ID: 000001
 
 Co-Authored-By: Claude Code <noreply@anthropic.com>
 ```
+
+Valid types: `feat`, `fix`, `docs`, `chore`, `refactor`, `test`, `perf`, `ci`
 
 ---
 

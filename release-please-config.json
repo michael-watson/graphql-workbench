@@ -1,0 +1,59 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "packages": {
+    "packages/graphql-workbench": {
+      "release-type": "node",
+      "package-name": "graphql-workbench",
+      "changelog-path": "CHANGELOG.md",
+      "bump-minor-pre-major": false,
+      "bump-patch-for-minor-pre-major": false,
+      "draft": false,
+      "prerelease": false
+    },
+    "packages/graphql-embedding-core": {
+      "release-type": "node",
+      "package-name": "graphql-embedding-core",
+      "changelog-path": "CHANGELOG.md",
+      "bump-minor-pre-major": false,
+      "bump-patch-for-minor-pre-major": false,
+      "draft": false,
+      "prerelease": false
+    },
+    "packages/graphql-embedding-parser": {
+      "release-type": "node",
+      "package-name": "graphql-embedding-parser",
+      "changelog-path": "CHANGELOG.md",
+      "bump-minor-pre-major": false,
+      "bump-patch-for-minor-pre-major": false,
+      "draft": false,
+      "prerelease": false
+    },
+    "packages/graphql-embedding-operation": {
+      "release-type": "node",
+      "package-name": "graphql-embedding-operation",
+      "changelog-path": "CHANGELOG.md",
+      "bump-minor-pre-major": false,
+      "bump-patch-for-minor-pre-major": false,
+      "draft": false,
+      "prerelease": false
+    },
+    "packages/graphql-embedding-schema-design": {
+      "release-type": "node",
+      "package-name": "graphql-embedding-schema-design",
+      "changelog-path": "CHANGELOG.md",
+      "bump-minor-pre-major": false,
+      "bump-patch-for-minor-pre-major": false,
+      "draft": false,
+      "prerelease": false
+    },
+    "packages/graphql-embedding": {
+      "release-type": "node",
+      "package-name": "graphql-embedding",
+      "changelog-path": "CHANGELOG.md",
+      "bump-minor-pre-major": false,
+      "bump-patch-for-minor-pre-major": false,
+      "draft": false,
+      "prerelease": false
+    }
+  }
+}

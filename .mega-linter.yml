@@ -1,0 +1,22 @@
+# MegaLinter configuration
+# https://megalinter.io/latest/configuration/
+
+# Only check files changed in the PR (faster)
+VALIDATE_ALL_CODEBASE: false
+
+# Report only — do not auto-fix files
+APPLY_FIXES: none
+
+# Linters to enable (JavaScript flavor already includes many)
+ENABLE_LINTERS:
+  - TYPESCRIPT_ES
+  - MARKDOWN_MARKDOWNLINT
+  - JSON_PRETTIER
+  - YAML_PRETTIER
+  - ACTION_ACTIONLINT
+
+# Paths to exclude from linting
+FILTER_REGEX_EXCLUDE: (node_modules|dist|\.rpi|coverage|\.vsix|models)
+
+# Don't fail on linting issues initially — informational mode
+DISABLE_ERRORS: true

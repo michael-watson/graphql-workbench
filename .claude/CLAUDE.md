@@ -199,13 +199,16 @@ Since this is a template, follow these standards:
 
 ### git-commit-spec.sh
 
-**Purpose:** Create git commit for completed spec
+**Purpose:** Create a conventional commit for a completed spec
 **Location:** `.rpi/scripts/helpers/git-commit-spec.sh`
 **Usage:**
 
 ```bash
+# Always supply --type and --scope explicitly
 .rpi/scripts/helpers/git-commit-spec.sh \
-  .rpi/specs/completed/000001-feature-completed.md
+  .rpi/specs/completed/000001-feature-completed.md \
+  --type feat \
+  --scope short-name
 ```
 
 ---
@@ -356,11 +359,12 @@ Respect these settings during implementation.
 - Use `git-commit-spec.sh` for consistency
 - Include spec ID in commit message
 - Include Co-Authored-By tag for Claude
+- All commits MUST use conventional commit format with a scope
 
 ### Commit Message Format
 
 ```
-{Spec Title}
+{type}({scope}): {description}
 
 {Implementation Summary}
 
@@ -368,6 +372,29 @@ Spec ID: {spec_id}
 
 Co-Authored-By: Claude Code <noreply@anthropic.com>
 ```
+
+**Types:** `feat`, `fix`, `docs`, `chore`, `refactor`, `test`, `perf`, `ci`
+
+**Scope:** short kebab-case keyword for the area changed (e.g. `auth`,
+`mcp-server`, `design-tree`, `embedding`, `ci`)
+
+**Examples:**
+- `feat(auth): add JWT authentication with refresh tokens`
+- `fix(mcp-client): initialize handshake before tool calls`
+- `docs(ai-ready): update patterns for authentication`
+- `chore(ci): add release-please automation`
+
+### PR Title Format
+
+Every PR title must match: `type(scope): description`
+
+This is enforced by the `.github/workflows/pr-title.yml` action. When a PR
+is squash-merged the PR title becomes the commit on `main`, which release-please
+reads to determine version bumps:
+- `feat(...)` → minor bump
+- `fix(...)` → patch bump
+- `feat!(...) / BREAKING CHANGE` → major bump
+- anything else → no bump
 
 ### Branching
 

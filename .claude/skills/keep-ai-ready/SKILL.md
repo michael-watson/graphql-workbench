@@ -312,7 +312,7 @@ Before committing updates:
 ## Commit Message Format
 
 ```
-Update AI-ready documentation
+docs(ai-ready): update documentation for authentication patterns
 
 Updated AGENTS.md with authentication patterns from spec 000001.
 Added JWT middleware pattern and security considerations.
@@ -321,6 +321,10 @@ Updated HOWTOAI.md with example workflow for protected endpoints.
 
 Refs: spec 000001, spec 000002
 ```
+
+Use `docs(ai-ready):` for AI-ready doc updates. Follow conventional commit
+format: `type(scope): description`. Valid types: `feat`, `fix`, `docs`,
+`chore`, `refactor`, `test`, `perf`, `ci`.
 
 ---
 
