@@ -1041,19 +1041,22 @@ export class DynamicOperationGenerator {
     }
 
     // Pre-emptively introspect any types that have "does not have a field" errors.
-    // We do this in code rather than asking the LLM to call the tool, because the LLM
-    // may skip the tool call and guess instead. This guarantees the real field list is
-    // in context before the LLM writes the fix.
+    // We do this in code (not by asking the LLM to call a tool) so it always happens.
+    // Log via the OperationLogger so the calls appear in the playground UI.
     if (mcpClient && typesToIntrospect.length > 0) {
       for (const typeName of typesToIntrospect) {
         this.log(`[Fix] Pre-introspecting type: ${typeName}`);
+        this.logger?.onToolCall?.("introspect", typeName);
         const typeInfo = await mcpClient.introspect(typeName);
+        this.logger?.onToolResult?.("introspect", typeInfo.length);
         if (typeInfo) {
           this.log(`[Fix] Got schema for ${typeName} (${typeInfo.length} chars)`);
           messages.push({
             role: "assistant",
             content: `Actual schema for type ${typeName} (use ONLY these fields):\n${typeInfo}`,
           });
+        } else {
+          this.log(`[Fix] introspect("${typeName}") returned empty — MCP server may not know this type`);
         }
       }
     }
