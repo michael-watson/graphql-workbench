@@ -1012,10 +1012,28 @@ export class DynamicOperationGenerator {
       requiredArgsInstruction = `\n\nCRITICAL: The following arguments are REQUIRED and must be present in the fixed operation:\n${argList}`;
     }
 
+    // Extract the type names that have "does not have a field" errors so the LLM
+    // knows exactly which types to introspect before guessing field names.
+    const missingFieldTypes = new Set<string>();
+    for (const err of errors) {
+      const match = err.match(/type [`'"]?(\w+)[`'"]? does not have a field/i);
+      if (match?.[1]) {
+        missingFieldTypes.add(match[1]);
+      }
+    }
+
+    const hasMcp = !!this.getMcpClient();
+    const typesToIntrospect = [...missingFieldTypes];
+
+    // Tell the LLM to use introspect/search tools rather than guessing field names
+    const toolsInstruction = hasMcp
+      ? `\n\nYou have access to introspect and search tools. NEVER guess field names — if a field does not exist on a type, use the introspect tool to look up that type and see what fields it actually has, then use only those real field names.`
+      : "";
+
     const messages: ChatMessage[] = [
       {
         role: "system",
-        content: `You are a GraphQL expert. Fix the errors in the provided GraphQL operation. Return ONLY the corrected operation in a \`\`\`graphql code block.${requiredArgsInstruction}`,
+        content: `You are a GraphQL expert. Fix the errors in the provided GraphQL operation. Return ONLY the corrected operation in a \`\`\`graphql code block.${requiredArgsInstruction}${toolsInstruction}`,
       },
     ];
 
@@ -1033,6 +1051,11 @@ export class DynamicOperationGenerator {
         ? `\n\nRemember: ALL required arguments must be included: ${requiredArgs.map((a: { name: string; type: string }) => `${a.name} (${a.type})`).join(", ")}`
         : "";
 
+    const introspectDirective =
+      typesToIntrospect.length > 0 && hasMcp
+        ? `\n\nBefore writing the fix, use the introspect tool to look up the following types and find their actual fields: ${typesToIntrospect.join(", ")}. Only select fields that introspect confirms exist.`
+        : "";
+
     const userPrompt = `The following GraphQL operation has errors:
 
 \`\`\`graphql
@@ -1043,8 +1066,8 @@ Errors:
 ${errors.map((e) => `- ${e}`).join("\n")}
 
 Original request: "${inputText}"
-
-Please fix the operation and return only the corrected GraphQL operation.${requiredArgsSuffix}`;
+${introspectDirective}
+Please fix the operation using only fields that actually exist in the schema.${requiredArgsSuffix}`;
 
     messages.push({
       role: "user",
@@ -1052,6 +1075,9 @@ Please fix the operation and return only the corrected GraphQL operation.${requi
     });
 
     this.log(`Sending fix request to LLM with ${context.length} schema documents`);
+    if (typesToIntrospect.length > 0) {
+      this.log(`[Fix] LLM instructed to introspect: ${typesToIntrospect.join(", ")}`);
+    }
 
     const response = await this.callLLMWithMcpTools(messages, {
       temperature: 0.1,
