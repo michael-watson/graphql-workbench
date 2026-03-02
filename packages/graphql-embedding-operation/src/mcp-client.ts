@@ -254,20 +254,47 @@ export class McpClient {
         return { valid: true, errors: [] };
       }
 
-      // Apollo MCP Server wraps each logical error in multi-line ASCII diagnostic
-      // blocks with source pointers, pipe characters, and underline art — all noise
-      // for an LLM. Extract only the two informative parts per error:
-      //   • "Error: ..." lines  — the actual error message
-      //   • "Note: path to the field: ..." lines  — the accessor path (useful context)
-      const errorLines = trimmed
-        .split("\n")
-        .map((l) => l.trim())
-        .filter((l) => /^Error:/i.test(l) || /^Note: path to the field:/i.test(l));
+      // Apollo MCP Server wraps each logical error in a multi-line ASCII diagnostic
+      // block. Normalize each error to graphql-js format so fixOperationErrors
+      // receives consistent errors regardless of which validator ran:
+      //   MCP:   "Error: type `Graph` does not have a field `schema`"
+      //          "Note: path to the field: `query Foo → graph → schema`"
+      //   →  "Cannot query field \"schema\" on type \"Graph\"."
+      //      "Note: path to the field: `query Foo → graph → schema`"
+      const rawLines = trimmed.split("\n").map((l) => l.trim());
+      const errors: string[] = [];
+      let i = 0;
+      while (i < rawLines.length) {
+        const line = rawLines[i]!;
+        if (/^Error:/i.test(line)) {
+          // Normalize "Error: type `X` does not have a field `Y`"
+          // → "Cannot query field "Y" on type "X"." (graphql-js format)
+          const fieldMatch = line.match(
+            /type [`'"]?(\w+)[`'"]? does not have a field [`'"]?(\w+)[`'"]/i,
+          );
+          const normalized = fieldMatch
+            ? `Cannot query field "${fieldMatch[2]}" on type "${fieldMatch[1]}".`
+            : line.replace(/^Error:\s*/i, "").trim();
+
+          // Pair with the following Note: line if present (provides path context)
+          const next = rawLines[i + 1] ?? "";
+          if (/^Note: path to the field:/i.test(next)) {
+            errors.push(`${normalized}\n${next}`);
+            i += 2;
+          } else {
+            errors.push(normalized);
+            i++;
+          }
+        } else {
+          i++;
+        }
+      }
 
       // Fall back to all non-empty lines if the format didn't match (future-proofing)
-      const lines = errorLines.length > 0
-        ? errorLines
-        : trimmed.split("\n").map((l) => l.trim()).filter((l) => l.length > 0);
+      const lines =
+        errors.length > 0
+          ? errors
+          : trimmed.split("\n").map((l) => l.trim()).filter((l) => l.length > 0);
 
       return { valid: false, errors: lines };
     } catch {
