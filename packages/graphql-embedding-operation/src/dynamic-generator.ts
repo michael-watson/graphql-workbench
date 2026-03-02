@@ -1016,6 +1016,7 @@ export class DynamicOperationGenerator {
     const maxValidationRetries = maxRetries ?? this.maxValidationRetries;
     let currentOperation = operation;
     let attempts = 1;
+    let previousErrorKey = "";
 
     while (attempts <= maxValidationRetries) {
       this.log(`\nValidation attempt ${attempts}/${maxValidationRetries}`);
@@ -1057,6 +1058,17 @@ export class DynamicOperationGenerator {
         break;
       }
 
+      // Detect stalled progress: same errors as previous attempt means the LLM
+      // is not making progress and needs a stronger nudge.
+      const currentErrorKey = [...validation.errors].sort().join("|");
+      const stalled = currentErrorKey === previousErrorKey;
+      if (stalled) {
+        this.log(
+          "[Fix] Same errors as previous attempt — escalating fix strategy",
+        );
+      }
+      previousErrorKey = currentErrorKey;
+
       // Try to fix errors with LLM (tool-enabled when MCP is available)
       this.log("Attempting to fix errors via LLM...");
       currentOperation = await this.fixOperationErrors(
@@ -1064,6 +1076,7 @@ export class DynamicOperationGenerator {
         validation.errors,
         context,
         inputText,
+        stalled,
       );
       this.log("\nFixed operation:");
       this.log(currentOperation);
@@ -1110,6 +1123,7 @@ export class DynamicOperationGenerator {
     errors: string[],
     context: EmbeddingDocument[],
     inputText: string,
+    stalled = false,
   ): Promise<string> {
     // Re-derive required args from the root field (first context doc is the root field)
     const rootFieldDoc = context[0];
@@ -1146,10 +1160,16 @@ export class DynamicOperationGenerator {
 
     const mcpClient = this.getMcpClient();
 
+    // When stalled, use a stronger system prompt instructing the LLM to try a
+    // completely different approach rather than repeating the same mistake.
+    const stalledInstruction = stalled
+      ? "\n\nWARNING: Previous fix attempts did not resolve the errors. You MUST take a completely different approach — remove the problematic field paths entirely and restructure the query using only fields you can confirm exist."
+      : "";
+
     const messages: ChatMessage[] = [
       {
         role: "system",
-        content: `You are a GraphQL expert. Fix the errors in the provided GraphQL operation. Return ONLY the corrected operation in a \`\`\`graphql code block. Use ONLY the fields shown in the schema context — never invent or guess field names.${requiredArgsInstruction}`,
+        content: `You are a GraphQL expert. Fix the errors in the provided GraphQL operation. Return ONLY the corrected operation in a \`\`\`graphql code block. Use ONLY the fields shown in the schema context — never invent or guess field names.${requiredArgsInstruction}${stalledInstruction}`,
       },
     ];
 
@@ -1179,15 +1199,20 @@ export class DynamicOperationGenerator {
       }
     }
 
+    // Minimum introspect response length to be considered useful.
+    // Responses shorter than this are treated as "type not found / no fields".
+    const MIN_INTROSPECT_CHARS = 30;
+
     // Introspect any types that have "does not have a field" errors so the LLM
     // knows exactly which fields are available on that type.
+    const emptyIntrospectTypes: string[] = [];
     if (mcpClient && missingFieldsByType.size > 0) {
       for (const [typeName] of missingFieldsByType.entries()) {
         this.log(`[Fix] Introspecting type: ${typeName}`);
         this.logger?.onToolCall?.("introspect", typeName);
         const typeInfo = await mcpClient.introspect(typeName);
         this.logger?.onToolResult?.("introspect", typeInfo.length);
-        if (typeInfo) {
+        if (typeInfo && typeInfo.length >= MIN_INTROSPECT_CHARS) {
           this.log(
             `[Fix] Schema for ${typeName} (${
               typeInfo.length
@@ -1198,7 +1223,16 @@ export class DynamicOperationGenerator {
             content: `Fields available on type ${typeName} (use ONLY these fields — do not guess):\n${typeInfo}`,
           });
         } else {
-          this.log(`[Fix] introspect("${typeName}") returned empty`);
+          // Introspect returned too little — the type is likely not in the embedded
+          // schema. Tell the LLM explicitly so it stops guessing fields on it.
+          this.log(
+            `[Fix] introspect("${typeName}") returned ${typeInfo.length} chars — treating as unavailable`,
+          );
+          emptyIntrospectTypes.push(typeName);
+          messages.push({
+            role: "assistant",
+            content: `Type "${typeName}" returned no usable field information from introspection. This type is likely not accessible or does not exist in the embedded schema. Do NOT query any fields on "${typeName}" — remove or replace this field path in the operation.`,
+          });
         }
       }
     }
@@ -1211,8 +1245,15 @@ export class DynamicOperationGenerator {
             .join(", ")}`
         : "";
 
+    const usableTypes = [...missingFieldsByType.keys()].filter(
+      (t) => !emptyIntrospectTypes.includes(t),
+    );
+    const removeNote =
+      emptyIntrospectTypes.length > 0
+        ? `\n\nCRITICAL: The following types have no accessible fields — remove all field selections on them: ${emptyIntrospectTypes.map((t) => `"${t}"`).join(", ")}.`
+        : "";
     const typeNote =
-      missingFieldsByType.size > 0
+      usableTypes.length > 0
         ? `\n\nThe introspection results above show the exact fields available on each failing type. Use ONLY those fields — do not invent or guess field names.`
         : "";
 
@@ -1226,7 +1267,7 @@ Errors:
 ${errors.map((e) => `- ${e}`).join("\n")}
 
 Original request: "${inputText}"
-${typeNote}
+${typeNote}${removeNote}
 Rewrite the operation using only fields that actually exist in the schema context provided above.${requiredArgsSuffix}`;
 
     messages.push({
@@ -1244,9 +1285,17 @@ Rewrite the operation using only fields that actually exist in the schema contex
         )}`,
       );
     }
+    if (emptyIntrospectTypes.length > 0) {
+      this.log(
+        `[Fix] Types with no usable introspect data (instructed to remove): ${emptyIntrospectTypes.join(", ")}`,
+      );
+    }
+
+    // Use higher temperature when stalled to encourage divergent solutions.
+    const temperature = stalled ? 0.4 : 0.1;
 
     const response = await this.callLLMWithMcpTools(messages, {
-      temperature: 0.1,
+      temperature,
       maxTokens: 2000,
     });
 
