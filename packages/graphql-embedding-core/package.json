@@ -30,7 +30,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "graphql-embedding-parser": "^0.1.0"
+    "graphql-embedding-parser": "*"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.2.0",
