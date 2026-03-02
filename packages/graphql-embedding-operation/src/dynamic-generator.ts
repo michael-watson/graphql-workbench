@@ -1022,27 +1022,40 @@ export class DynamicOperationGenerator {
       }
     }
 
-    const hasMcp = !!this.getMcpClient();
+    const mcpClient = this.getMcpClient();
     const typesToIntrospect = [...missingFieldTypes];
-
-    // Tell the LLM to use introspect/search tools rather than guessing field names
-    const toolsInstruction = hasMcp
-      ? `\n\nYou have access to introspect and search tools. NEVER guess field names — if a field does not exist on a type, use the introspect tool to look up that type and see what fields it actually has, then use only those real field names.`
-      : "";
 
     const messages: ChatMessage[] = [
       {
         role: "system",
-        content: `You are a GraphQL expert. Fix the errors in the provided GraphQL operation. Return ONLY the corrected operation in a \`\`\`graphql code block.${requiredArgsInstruction}${toolsInstruction}`,
+        content: `You are a GraphQL expert. Fix the errors in the provided GraphQL operation. Return ONLY the corrected operation in a \`\`\`graphql code block. Only use fields that are explicitly listed in the schema context provided.${requiredArgsInstruction}`,
       },
     ];
 
-    // Provide schema context
+    // Provide original schema context from vector store
     for (const doc of context) {
       messages.push({
         role: "assistant",
         content: `Schema: ${doc.content}`,
       });
+    }
+
+    // Pre-emptively introspect any types that have "does not have a field" errors.
+    // We do this in code rather than asking the LLM to call the tool, because the LLM
+    // may skip the tool call and guess instead. This guarantees the real field list is
+    // in context before the LLM writes the fix.
+    if (mcpClient && typesToIntrospect.length > 0) {
+      for (const typeName of typesToIntrospect) {
+        this.log(`[Fix] Pre-introspecting type: ${typeName}`);
+        const typeInfo = await mcpClient.introspect(typeName);
+        if (typeInfo) {
+          this.log(`[Fix] Got schema for ${typeName} (${typeInfo.length} chars)`);
+          messages.push({
+            role: "assistant",
+            content: `Actual schema for type ${typeName} (use ONLY these fields):\n${typeInfo}`,
+          });
+        }
+      }
     }
 
     // Provide the broken operation and errors
@@ -1051,9 +1064,9 @@ export class DynamicOperationGenerator {
         ? `\n\nRemember: ALL required arguments must be included: ${requiredArgs.map((a: { name: string; type: string }) => `${a.name} (${a.type})`).join(", ")}`
         : "";
 
-    const introspectDirective =
-      typesToIntrospect.length > 0 && hasMcp
-        ? `\n\nBefore writing the fix, use the introspect tool to look up the following types and find their actual fields: ${typesToIntrospect.join(", ")}. Only select fields that introspect confirms exist.`
+    const typeNote =
+      typesToIntrospect.length > 0
+        ? `\n\nThe actual schema for ${typesToIntrospect.join(", ")} is provided above. Use ONLY the fields listed there — do not invent or guess field names.`
         : "";
 
     const userPrompt = `The following GraphQL operation has errors:
@@ -1066,7 +1079,7 @@ Errors:
 ${errors.map((e) => `- ${e}`).join("\n")}
 
 Original request: "${inputText}"
-${introspectDirective}
+${typeNote}
 Please fix the operation using only fields that actually exist in the schema.${requiredArgsSuffix}`;
 
     messages.push({
@@ -1076,7 +1089,7 @@ Please fix the operation using only fields that actually exist in the schema.${r
 
     this.log(`Sending fix request to LLM with ${context.length} schema documents`);
     if (typesToIntrospect.length > 0) {
-      this.log(`[Fix] LLM instructed to introspect: ${typesToIntrospect.join(", ")}`);
+      this.log(`[Fix] Injected live schema for: ${typesToIntrospect.join(", ")}`);
     }
 
     const response = await this.callLLMWithMcpTools(messages, {
