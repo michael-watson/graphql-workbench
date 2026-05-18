@@ -52,6 +52,30 @@ export function openExplorerPanelCommand(
           break;
         }
 
+        case "explorerRequest": {
+          const operationId = message.operationId as string;
+          const endpointUrl = message.endpointUrl as string;
+          const body = message.body as Record<string, unknown>;
+          const headers = (message.headers as Record<string, string>) || {};
+          try {
+            const res = await fetch(endpointUrl, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", "apollo-require-preflight": "1", ...headers },
+              body: JSON.stringify(body),
+            });
+            const data = (await res.json()) as unknown;
+            panel.webview.postMessage({ type: "explorerResponse", operationId, response: data });
+          } catch (err) {
+            const msg2 = err instanceof Error ? err.message : String(err);
+            panel.webview.postMessage({
+              type: "explorerResponse",
+              operationId,
+              response: { errors: [{ message: msg2 }] },
+            });
+          }
+          break;
+        }
+
         case "generate": {
           const tableName = message.tableName as string;
           const prompt = message.prompt as string;
@@ -306,6 +330,20 @@ function getWebviewHtml(webview: vscode.Webview, nonce: string): string {
           sendToExplorer({
             name: 'HandshakeResponse',
             parentHtmlId: 'explorerFrame',
+            sendRequestsViaPostMessage: true,
+          });
+        }
+        if (data.name === 'ExplorerRequest') {
+          vscode.postMessage({
+            type: 'explorerRequest',
+            operationId: data.operationId,
+            endpointUrl: data.sandboxEndpointUrl || endpointInput.value.trim(),
+            body: {
+              query: data.operation,
+              variables: data.variables,
+              operationName: data.operationName,
+            },
+            headers: data.headers || {},
           });
         }
         if (data.name === 'ExplorerListeningForSchema') {
@@ -413,6 +451,14 @@ function getWebviewHtml(webview: vscode.Webview, nonce: string): string {
           generateBtn.disabled = false;
           generateBtn.textContent = 'Generate';
           setStatus(msg.error, true);
+          break;
+        }
+        case 'explorerResponse': {
+          sendToExplorer({
+            name: 'ExplorerResponse',
+            operationId: msg.operationId,
+            response: msg.response,
+          });
           break;
         }
         case 'setGeneratedOperation': {
